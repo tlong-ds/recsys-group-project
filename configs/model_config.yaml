@@ -1,0 +1,17 @@
+model:
+  name: hybrid_recsys
+  version: "0.1.0"
+
+collaborative_filtering:
+  n_factors: 64
+  n_epochs: 20
+  lr: 0.001
+  reg: 0.01
+
+content_based:
+  embedding_dim: 128
+  similarity_metric: cosine
+
+hybrid:
+  cf_weight: 0.6
+  cb_weight: 0.4

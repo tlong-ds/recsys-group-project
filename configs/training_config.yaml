@@ -1,0 +1,20 @@
+training:
+  seed: 42
+  test_size: 0.2
+  val_size: 0.1
+  batch_size: 256
+  num_epochs: 30
+  early_stopping_patience: 5
+
+data:
+  raw_path: data/raw
+  processed_path: data/processed
+  features_path: data/features
+
+logging:
+  level: INFO
+  log_dir: logs/
+
+mlflow:
+  tracking_uri: http://localhost:5000
+  experiment_name: recsys_experiment
