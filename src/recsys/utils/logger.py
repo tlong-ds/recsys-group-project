@@ -8,10 +8,10 @@ from pathlib import Path
 from loguru import logger
 
 
-def get_logger(log_file: str | Path | None = None):
+def get_logger(log_file: str | Path | None = None, level: str = "INFO"):
     """Configure and return the application logger."""
     logger.remove()
-    logger.add(sys.stderr, level="INFO")
+    logger.add(sys.stderr, level=level)
     if log_file is not None:
         logger.add(log_file, rotation="10 MB", retention="7 days", level="DEBUG")
     return logger

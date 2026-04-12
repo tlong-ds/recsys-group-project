@@ -10,7 +10,7 @@ import yaml
 
 def load_config(path: str | Path) -> dict[str, Any]:
     """Load a YAML config file and return its contents as a dict."""
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 

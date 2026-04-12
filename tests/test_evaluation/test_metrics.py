@@ -1,33 +1,18 @@
-"""Tests for evaluation metrics."""
+"""Tests for ranking metrics."""
 
-import pytest
+from __future__ import annotations
 
-from recsys.evaluation.metrics import (
-    hit_rate_at_k,
-    mean_average_precision,
-    ndcg_at_k,
-    precision_at_k,
-    recall_at_k,
-)
+import unittest
+
+from recsys.evaluation.metrics import hit_rate_at_k, mrr_at_k, ndcg_at_k
 
 
-class TestMetrics:
-    def test_precision_at_k_not_implemented(self):
-        with pytest.raises(NotImplementedError):
-            precision_at_k(recommended=[1, 2, 3], relevant=[1, 2], k=3)
+class TestMetrics(unittest.TestCase):
+    def test_hit_rate_at_k_returns_one_when_target_is_present(self) -> None:
+        self.assertEqual(hit_rate_at_k([4, 5, 6], [5], 3), 1.0)
 
-    def test_recall_at_k_not_implemented(self):
-        with pytest.raises(NotImplementedError):
-            recall_at_k(recommended=[1, 2, 3], relevant=[1, 2], k=3)
+    def test_mrr_at_k_uses_first_relevant_rank(self) -> None:
+        self.assertAlmostEqual(mrr_at_k([4, 5, 6], [5], 3), 0.5)
 
-    def test_ndcg_at_k_not_implemented(self):
-        with pytest.raises(NotImplementedError):
-            ndcg_at_k(recommended=[1, 2, 3], relevant=[1, 2], k=3)
-
-    def test_map_not_implemented(self):
-        with pytest.raises(NotImplementedError):
-            mean_average_precision(all_recommended=[[1, 2]], all_relevant=[[1]])
-
-    def test_hit_rate_not_implemented(self):
-        with pytest.raises(NotImplementedError):
-            hit_rate_at_k(all_recommended=[[1, 2]], all_relevant=[[1]], k=2)
+    def test_ndcg_at_k_is_normalised(self) -> None:
+        self.assertAlmostEqual(ndcg_at_k([5, 4, 6], [5], 3), 1.0)

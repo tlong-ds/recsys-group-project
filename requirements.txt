@@ -8,3 +8,4 @@ uvicorn[standard]>=0.29
 pydantic>=2.7
 pyyaml>=6.0
 loguru>=0.7
+streamlit>=1.34

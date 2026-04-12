@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recsys-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: recsys-api
+  template:
+    metadata:
+      labels:
+        app: recsys-api
+    spec:
+      containers:
+        - name: api
+          image: recsys-api:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: RECSYS_MODEL_PATH
+              value: /app/models/trained/latest/model.json

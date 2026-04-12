@@ -1,1 +1,1 @@
-"""Tests for recommendation models."""
+"""Tests for session-based models."""

@@ -1,28 +1,30 @@
-"""Predictor: wraps a trained model for online/batch inference."""
+"""Inference wrapper for the trained session recommender."""
 
 from __future__ import annotations
 
-from recsys.models.base_model import BaseRecsysModel
+from pathlib import Path
+
+from recsys.models.srgnn import SRGNNRecommender
 
 
 class Predictor:
-    """Load a trained model and serve recommendations."""
+    """Load a model artifact and serve next-item recommendations."""
 
-    def __init__(self, model: BaseRecsysModel) -> None:
+    def __init__(self, model: SRGNNRecommender) -> None:
         self.model = model
 
     @classmethod
     def from_path(cls, model_path: str) -> "Predictor":
-        """Load a persisted model and return a ready Predictor."""
-        # TODO: implement
-        raise NotImplementedError
+        """Load a persisted model artifact from disk."""
+        path = Path(model_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Model artifact not found at {path}")
+        return cls(SRGNNRecommender.load(path))
 
-    def get_recommendations(self, user_id: int, top_k: int = 10) -> list[int]:
-        """Return top-k item IDs for the given user."""
-        # TODO: implement
-        raise NotImplementedError
+    def get_recommendations(self, item_sequence: list[int], top_k: int = 10) -> list[int]:
+        """Return the top-k next-item predictions for a session context."""
+        return self.model.recommend(item_sequence, top_k=top_k)
 
-    def get_scores(self, user_id: int, item_ids: list[int]) -> list[float]:
-        """Return predicted scores for specific (user, item) pairs."""
-        # TODO: implement
-        raise NotImplementedError
+    def get_scores(self, item_sequence: list[int], item_ids: list[int]) -> list[float]:
+        """Return scores for candidate items."""
+        return self.model.score(item_sequence, item_ids)

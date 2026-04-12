@@ -1,42 +1,34 @@
-"""Ranking and rating metrics for recommendation evaluation."""
+"""Offline ranking metrics for next-item prediction."""
 
 from __future__ import annotations
 
-import numpy as np
+import math
 
 
-def precision_at_k(recommended: list, relevant: list, k: int) -> float:
-    """Fraction of top-k recommendations that are relevant."""
-    # TODO: implement
-    raise NotImplementedError
+def hit_rate_at_k(recommended: list[int], relevant: list[int], k: int) -> float:
+    """Return 1 when any relevant item appears in the top-k list, else 0."""
+    top_k = recommended[:k]
+    return float(any(item in relevant for item in top_k))
 
 
-def recall_at_k(recommended: list, relevant: list, k: int) -> float:
-    """Fraction of relevant items found in top-k recommendations."""
-    # TODO: implement
-    raise NotImplementedError
+def mrr_at_k(recommended: list[int], relevant: list[int], k: int) -> float:
+    """Return reciprocal rank of the first relevant item within top-k."""
+    for rank, item in enumerate(recommended[:k], start=1):
+        if item in relevant:
+            return 1.0 / rank
+    return 0.0
 
 
-def ndcg_at_k(recommended: list, relevant: list, k: int) -> float:
-    """Normalised discounted cumulative gain at k."""
-    # TODO: implement
-    raise NotImplementedError
-
-
-def mean_average_precision(
-    all_recommended: list[list],
-    all_relevant: list[list],
-) -> float:
-    """Mean average precision across all users."""
-    # TODO: implement
-    raise NotImplementedError
-
-
-def hit_rate_at_k(
-    all_recommended: list[list],
-    all_relevant: list[list],
-    k: int,
-) -> float:
-    """Fraction of users for whom at least one relevant item is in top-k."""
-    # TODO: implement
-    raise NotImplementedError
+def ndcg_at_k(recommended: list[int], relevant: list[int], k: int) -> float:
+    """Return normalised discounted cumulative gain for binary relevance."""
+    gains = [
+        1.0 / math.log2(rank + 1)
+        for rank, item in enumerate(recommended[:k], start=1)
+        if item in relevant
+    ]
+    dcg = sum(gains)
+    ideal_hits = min(len(relevant), k)
+    if ideal_hits == 0:
+        return 0.0
+    idcg = sum(1.0 / math.log2(rank + 1) for rank in range(1, ideal_hits + 1))
+    return dcg / idcg

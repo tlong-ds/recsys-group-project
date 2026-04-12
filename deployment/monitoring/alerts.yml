@@ -1,0 +1,10 @@
+groups:
+  - name: recsys-api
+    rules:
+      - alert: RecSysApiDown
+        expr: up{job="recsys-api"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RecSys API is unreachable"

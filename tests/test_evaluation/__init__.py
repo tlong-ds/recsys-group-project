@@ -1,1 +1,1 @@
-"""Tests for evaluation metrics."""
+"""Tests for offline evaluation and ranking metrics."""

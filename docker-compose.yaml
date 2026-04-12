@@ -1,0 +1,43 @@
+services:
+  api:
+    build: .
+    command: ["recsys-serve", "--config", "configs/serving_config.yaml"]
+    ports:
+      - "8000:8000"
+    environment:
+      RECSYS_MODEL_PATH: /app/models/trained/latest/model.json
+    volumes:
+      - ./configs:/app/configs
+      - ./models:/app/models
+    depends_on:
+      - mlflow
+
+  streamlit:
+    build: .
+    command:
+      [
+        "streamlit",
+        "run",
+        "streamlit_app/app.py",
+        "--server.address=0.0.0.0",
+        "--server.port=8501"
+      ]
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app
+    depends_on:
+      - api
+
+  mlflow:
+    image: python:3.11-slim
+    command:
+      [
+        "/bin/sh",
+        "-c",
+        "pip install mlflow==2.12.2 && mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow.db --default-artifact-root /mlflow/artifacts"
+      ]
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./deployment/mlflow:/mlflow

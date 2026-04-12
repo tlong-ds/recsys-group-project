@@ -1,20 +1,19 @@
 training:
   seed: 42
-  test_size: 0.2
-  val_size: 0.1
+  test_ratio: 0.1
+  val_ratio: 0.1
   batch_size: 256
-  num_epochs: 30
+  num_epochs: 10
   early_stopping_patience: 5
-
-data:
-  raw_path: data/raw
-  processed_path: data/processed
-  features_path: data/features
+  top_k: 20
 
 logging:
   level: INFO
-  log_dir: logs/
+  log_dir: logs
+
+registry:
+  root_path: models/trained
 
 mlflow:
-  tracking_uri: http://localhost:5000
-  experiment_name: recsys_experiment
+  tracking_uri: http://mlflow:5000
+  experiment_name: recsys_srgnn

@@ -1,1 +1,5 @@
-"""Models sub-package: collaborative filtering, content-based, and hybrid models."""
+"""Session-based recommendation models."""
+
+from recsys.models.srgnn import SRGNNRecommender
+
+__all__ = ["SRGNNRecommender"]

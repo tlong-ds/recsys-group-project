@@ -1,1 +1,1 @@
-"""Tests for feature engineering."""
+"""Tests for session feature generation."""

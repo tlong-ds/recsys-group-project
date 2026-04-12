@@ -1,17 +1,29 @@
-"""Tests for Preprocessor."""
+"""Tests for SessionPreprocessor."""
 
-import pytest
+from __future__ import annotations
 
-from recsys.data.preprocessor import Preprocessor
+import unittest
+
+import pandas as pd
+
+from recsys.data.preprocessor import SessionPreprocessor
 
 
-class TestPreprocessor:
-    def test_fit_not_implemented(self):
-        prep = Preprocessor()
-        with pytest.raises(NotImplementedError):
-            prep.fit(None)  # type: ignore[arg-type]
+class TestSessionPreprocessor(unittest.TestCase):
+    def test_transform_sorts_rows_within_session(self) -> None:
+        interactions = pd.DataFrame(
+            {
+                "session_id": [1, 1, 2],
+                "item_id": [20, 10, 30],
+                "timestamp": [
+                    "2024-01-01T10:00:01",
+                    "2024-01-01T10:00:00",
+                    "2024-01-01T10:01:00",
+                ],
+            }
+        )
 
-    def test_transform_not_implemented(self):
-        prep = Preprocessor()
-        with pytest.raises(NotImplementedError):
-            prep.transform(None)  # type: ignore[arg-type]
+        processed = SessionPreprocessor().transform(interactions)
+
+        self.assertEqual(processed["item_id"].tolist(), [10, 20, 30])
+        self.assertTrue(pd.api.types.is_datetime64tz_dtype(processed["timestamp"]))

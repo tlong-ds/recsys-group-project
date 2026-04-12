@@ -1,0 +1,11 @@
+data:
+  raw_path: data/raw
+  interim_path: data/interim
+  processed_path: data/processed
+  interactions_file: interactions.csv
+  items_file: items.csv
+  users_file: users.csv
+  columns:
+    session_id: session_id
+    item_id: item_id
+    timestamp: timestamp

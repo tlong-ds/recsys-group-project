@@ -1,1 +1,1 @@
-"""Test suite for the recsys package."""
+"""Test suite for the refactored recsys package."""
