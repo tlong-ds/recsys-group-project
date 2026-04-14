@@ -9,6 +9,8 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
+from prometheus_client import Counter
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from recsys.serving.predictor import Predictor
 from recsys.serving.schemas import RecommendRequest, RecommendResponse
@@ -16,11 +18,19 @@ from recsys.utils.config import load_config
 
 DEFAULT_CONFIG_PATH = Path("configs/serving_config.yaml")
 
+# Custom metrics
+RECSYS_RECOMMENDATIONS_TOTAL = Counter(
+    "recsys_recommendations_total", "Total number of recommendations served"
+)
+
 
 def create_app(model_path: str | Path | None = None) -> FastAPI:
     """Create a FastAPI app bound to a specific model artifact."""
     resolved_model_path = str(model_path or _resolve_model_path())
     app = FastAPI(title="RecSys API", version="0.1.0")
+
+    # Instrument with Prometheus
+    Instrumentator().instrument(app).expose(app)
 
     @lru_cache(maxsize=1)
     def get_predictor() -> Predictor:
@@ -38,6 +48,8 @@ def create_app(model_path: str | Path | None = None) -> FastAPI:
                 request.item_sequence,
                 top_k=request.top_k,
             )
+            # Track business metrics
+            RECSYS_RECOMMENDATIONS_TOTAL.inc()
         except FileNotFoundError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         return RecommendResponse(
@@ -76,8 +88,8 @@ def _resolve_model_path() -> str:
         return os.environ["RECSYS_MODEL_PATH"]
     if DEFAULT_CONFIG_PATH.exists():
         config = load_config(DEFAULT_CONFIG_PATH)
-        return config.get("serving", {}).get("model_path", "models/trained/latest/model.json")
-    return "models/trained/latest/model.json"
+        return config.get("serving", {}).get("model_path", "models/trained/latest/")
+    return "models/trained/latest/"
 
 
 app = create_app()

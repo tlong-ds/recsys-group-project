@@ -9,7 +9,7 @@ COPY requirements.txt README.md pyproject.toml /app/
 COPY src /app/src
 
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -e .
 
 COPY configs /app/configs
