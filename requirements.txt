@@ -16,4 +16,4 @@ dvc[s3]
 boto3
 polars>=0.20
 pyarrow>=14.0
-pandera>=0.18
+pandera>=0.18 
