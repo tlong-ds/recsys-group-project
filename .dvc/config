@@ -1,13 +1,7 @@
 [core]
-    remote = dvc-local
+    remote = dvc-production
     autostage = true
-['remote "dvc-production"']
+[remote "dvc-production"]
     url = s3://recsys-data-storage-067518243363-ap-southeast-1-an/recsys-dvc/
-['remote "dvc-local"']
+[remote "dvc-local"]
     url = tmp/dvc-local
-['remote "lakefs-production"']
-    url = s3://recsys-data-storage-067518243363-ap-southeast-1-an/recsys-lake/
-    endpointurl = https://lakefs.my-company.com
-['remote "lakefs-local"']
-    url = s3://recsys-data-storage-067518243363-ap-southeast-1-an/recsys-lake/
-    endpointurl = http://localhost:8000
