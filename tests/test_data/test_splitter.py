@@ -15,7 +15,7 @@ class TestSplitter(unittest.TestCase):
             {
                 "session_id": [1, 1, 2, 2, 3],
                 "item_id": [1, 2, 3, 4, 5],
-                "timestamp": pd.to_datetime(
+                "eventdate": pd.to_datetime(
                     [
                         "2024-01-01",
                         "2024-01-02",
@@ -30,5 +30,5 @@ class TestSplitter(unittest.TestCase):
 
         train_df, val_df, test_df = split_by_time(interactions, val_ratio=0.2, test_ratio=0.2)
 
-        self.assertLess(train_df["timestamp"].max(), val_df["timestamp"].min())
-        self.assertLess(val_df["timestamp"].max(), test_df["timestamp"].min())
+        self.assertLess(train_df["eventdate"].max(), val_df["eventdate"].min())
+        self.assertLess(val_df["eventdate"].max(), test_df["eventdate"].min())

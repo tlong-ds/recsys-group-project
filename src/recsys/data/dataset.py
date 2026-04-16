@@ -21,7 +21,7 @@ class DatasetSplit:
 class DatasetBuilder:
     """Build dataset splits from preprocessed interactions."""
 
-    def __init__(self, timestamp_col: str = "timestamp") -> None:
+    def __init__(self, timestamp_col: str = "eventdate") -> None:
         self.timestamp_col = timestamp_col
 
     def build_splits(
