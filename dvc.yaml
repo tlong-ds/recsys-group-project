@@ -1,0 +1,23 @@
+stages:
+  ingest:
+    cmd: python -m recsys.data.ingest
+    deps:
+      - src/recsys/data/ingest.py
+      - data/raw/train-item-views.csv
+      - data/raw/train-clicks.csv
+      - data/raw/train-purchases.csv
+      - data/raw/train-queries.csv
+      - data/raw/products.csv
+      - data/raw/product-categories.csv
+    params:
+      - params.yaml:
+          - data.raw_dir
+          - data.processed_dir
+          # - ingest.min_interactions
+    outs:
+      - data/interim/interactions.parquet
+      - data/interim/items.parquet
+      - data/interim/queries.parquet
+    metrics:
+      - metrics/ingest_report.json:
+          cache: false

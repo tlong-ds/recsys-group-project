@@ -1,0 +1,54 @@
+schema: '2.0'
+stages:
+  ingest:
+    cmd: python -m recsys.data.ingest
+    deps:
+    - path: data/raw/product-categories.csv
+      hash: md5
+      md5: 0bde8e91d49d59cf35a8f48109655a02
+      size: 1979575
+    - path: data/raw/products.csv
+      hash: md5
+      md5: 28d274aaefbda53210d3f367be875d83
+      size: 7336417
+    - path: data/raw/train-clicks.csv
+      hash: md5
+      md5: 625e85e84d19ce5a447529003ca0e94b
+      size: 22501463
+    - path: data/raw/train-item-views.csv
+      hash: md5
+      md5: 7d5cdf594903e0ff027a45d214cfaa4b
+      size: 42664076
+    - path: data/raw/train-purchases.csv
+      hash: md5
+      md5: 14e693f09f3004d4d0ce76e367b61d85
+      size: 749277
+    - path: data/raw/train-queries.csv
+      hash: md5
+      md5: 6cceeb1cd1b3e8876658ebf758ad7008
+      size: 869462127
+    - path: src/recsys/data/ingest.py
+      hash: md5
+      md5: d03a8c1938ab2e9234e8571713b156a8
+      size: 5963
+    params:
+      params.yaml:
+        data.processed_dir: data/processed
+        data.raw_dir: data/raw
+    outs:
+    - path: data/interim/interactions.parquet
+      hash: md5
+      md5: 75fbe193cd58c0eb09f688adfe59bb23
+      size: 23962111
+    - path: data/interim/items.parquet
+      hash: md5
+      md5: 2d39835a0ea016b9479ec5afc03ca7c9
+      size: 4633987
+    - path: data/interim/queries.parquet
+      hash: md5
+      md5: a27a62ac827c305da44f335923d8e532
+      size: 597635569
+    - path: metrics/ingest_report.json
+      hash: md5
+      md5: 232d0aec4ac19a3469055d6f40b91482
+      size: 218
