@@ -15,4 +15,4 @@ class TestDataValidator(unittest.TestCase):
         interactions = pd.DataFrame({"session_id": [1], "item_id": [10]})
 
         with self.assertRaises(ValueError):
-            validator.validate_interactions(interactions)
+            validator.validate_interactions(interactions) 

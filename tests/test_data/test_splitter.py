@@ -31,4 +31,4 @@ class TestSplitter(unittest.TestCase):
         train_df, val_df, test_df = split_by_time(interactions, val_ratio=0.2, test_ratio=0.2)
 
         self.assertLess(train_df["eventdate"].max(), val_df["eventdate"].min())
-        self.assertLess(val_df["eventdate"].max(), test_df["eventdate"].min())
+        self.assertLess(val_df["eventdate"].max(), test_df["eventdate"].min()) 

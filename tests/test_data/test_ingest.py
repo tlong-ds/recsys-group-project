@@ -28,3 +28,4 @@ class TestDataLoader(unittest.TestCase):
 
         self.assertEqual(list(interactions.columns), ["session_id", "item_id", "timestamp"])
         self.assertEqual(len(interactions), 2)
+ 

@@ -69,7 +69,7 @@ class TestSessionPreprocessor(unittest.TestCase):
                     utc=True,
                 ),
             }
-        )
+        ) 
 
         with self.assertRaises(ValueError):
             SessionPreprocessor().filter_sessions(interactions, min_length=1, max_length=0)
