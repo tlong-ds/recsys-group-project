@@ -1,23 +1,77 @@
 stages:
   ingest:
-    cmd: python -m recsys.data.ingest
+    cmd: python -m recsys.data.pipeline --stage ingest --config configs/data_config.yaml
     deps:
+      - src/recsys/data/pipeline.py
       - src/recsys/data/ingest.py
+      - src/recsys/data/stages.py
+      - params.yaml
+      - configs/data_config.yaml
       - data/raw/train-item-views.csv
       - data/raw/train-clicks.csv
       - data/raw/train-purchases.csv
       - data/raw/train-queries.csv
       - data/raw/products.csv
       - data/raw/product-categories.csv
-    params:
-      - params.yaml:
-          - data.raw_dir
-          - data.processed_dir
-          # - ingest.min_interactions
     outs:
       - data/interim/interactions.parquet
       - data/interim/items.parquet
       - data/interim/queries.parquet
     metrics:
       - metrics/ingest_report.json:
+          cache: false
+
+  validate:
+    cmd: python -m recsys.data.pipeline --stage validate --config configs/data_config.yaml
+    deps:
+      - src/recsys/data/pipeline.py
+      - src/recsys/data/validator.py
+      - src/recsys/data/stages.py
+      - configs/data_config.yaml
+      - data/interim/interactions.parquet
+    metrics:
+      - data/validation_report.json:
+          cache: false
+
+  preprocess:
+    cmd: python -m recsys.data.pipeline --stage preprocess --config configs/data_config.yaml
+    deps:
+      - src/recsys/data/pipeline.py
+      - src/recsys/data/preprocessor.py
+      - src/recsys/data/stages.py
+      - configs/data_config.yaml
+      - data/interim/interactions.parquet
+    outs:
+      - data/interim/clean_interactions.parquet
+
+  split:
+    cmd: python -m recsys.data.pipeline --stage split --config configs/data_config.yaml
+    deps:
+      - src/recsys/data/pipeline.py
+      - src/recsys/data/splitter.py
+      - src/recsys/data/stages.py
+      - configs/data_config.yaml
+      - data/interim/clean_interactions.parquet
+    outs:
+      - data/interim/train_interactions.parquet
+      - data/interim/val_interactions.parquet
+      - data/interim/test_interactions.parquet
+
+  build_examples:
+    cmd: python -m recsys.data.pipeline --stage build_examples --config configs/data_config.yaml
+    deps:
+      - src/recsys/data/pipeline.py
+      - src/recsys/data/training_examples.py
+      - src/recsys/data/stages.py
+      - configs/data_config.yaml
+      - data/interim/train_interactions.parquet
+      - data/interim/val_interactions.parquet
+      - data/interim/test_interactions.parquet
+    outs:
+      - data/processed/train_examples.parquet
+      - data/processed/val_examples.parquet
+      - data/processed/test_examples.parquet
+      - data/processed/item_vocab.json
+    metrics:
+      - data/processed/data_stats.json:
           cache: false

@@ -1,3 +1,7 @@
 /interactions.parquet
 /items.parquet
 /queries.parquet
+/clean_interactions.parquet
+/train_interactions.parquet
+/val_interactions.parquet
+/test_interactions.parquet

@@ -80,9 +80,9 @@ class SessionPreprocessor:
         cleaned = cleaned.dropna(subset=[self.timestamp_col])
         dropped_ts_errors = initial_len - len(cleaned)
         if dropped_ts_errors > 0:
-            logger.warning(
-                f"Dropped {dropped_ts_errors:,} rows with unparseable timestamps"
-            )
+                logger.warning(
+                    f"Dropped {dropped_ts_errors:,} rows with unparseable timestamps"
+                )
         
         # Convert item_id to integer
         try:

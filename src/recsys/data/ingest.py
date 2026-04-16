@@ -6,9 +6,6 @@ import json
 from pathlib import Path
 
 import pandas as pd
-import yaml
-
-from recsys.utils.config import load_config
 from recsys.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -142,12 +139,12 @@ class DataLoader:
 
 def main() -> None:
     """Main ingestion entry point."""
-    params = load_config("params.yaml")
-    raw_dir = Path(params["data"]["raw_dir"])
-    interim_dir = Path(params["data"]["interim_dir"])
+    # Lazy import avoids circular dependency:
+    # stages -> ingest.DataLoader and ingest.main -> stages
+    from recsys.data.stages import run_ingest_stage
 
-    loader = DataLoader(raw_path=raw_dir, interim_path=interim_dir)
-    loader.ingest(params)
+    # Keep this module as a valid stage entrypoint for legacy callers.
+    run_ingest_stage(config_path="configs/data_config.yaml", params_path="params.yaml")
 
 
 if __name__ == "__main__":
