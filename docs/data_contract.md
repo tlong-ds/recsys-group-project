@@ -168,7 +168,7 @@ Supported split strategies:
 - ratio_based
 - diginetica_legacy
 - session_based
-- time_based
+- time_based 
 
 Contract requirement:
 - Train/validation/test splits must be temporally ordered per selected strategy
