@@ -8,6 +8,7 @@ import pandas as pd
 from recsys.evaluation.metrics import hit_rate_at_k, mrr_at_k, ndcg_at_k
 from recsys.models.srgnn import SRGNNRecommender
 
+# Define which metrics to use
 
 class Evaluator:
     """Compute ranking metrics on held-out next-item examples."""
