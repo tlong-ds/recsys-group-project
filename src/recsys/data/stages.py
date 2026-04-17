@@ -148,11 +148,6 @@ def _write_json(payload: dict[str, Any], path: str | Path) -> Path:
 def _build_ingest_params(data_cfg: dict[str, Any], params_cfg: dict[str, Any]) -> dict[str, Any]:
     ingest_defaults = {
         "item_views": "train-item-views.csv",
-        "clicks": "train-clicks.csv",
-        "purchases": "train-purchases.csv",
-        "queries": "train-queries.csv",
-        "products": "products.csv",
-        "product_categories": "product-categories.csv",
     }
     ingest_cfg = ingest_defaults | params_cfg.get("ingest", {}) | data_cfg.get("ingest", {})
 
@@ -185,8 +180,6 @@ def run_ingest_stage(
     interim = Path(data_cfg.get("interim_path", "data/interim"))
     return {
         "interactions": str(interim / "interactions.parquet"),
-        "items": str(interim / "items.parquet"),
-        "queries": str(interim / "queries.parquet"),
         "ingest_report": "metrics/ingest_report.json",
     }
 

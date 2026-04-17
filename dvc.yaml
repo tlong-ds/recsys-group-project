@@ -8,15 +8,8 @@ stages:
       - params.yaml
       - configs/data_config.yaml
       - data/raw/train-item-views.csv
-      - data/raw/train-clicks.csv
-      - data/raw/train-purchases.csv
-      - data/raw/train-queries.csv
-      - data/raw/products.csv
-      - data/raw/product-categories.csv
     outs:
       - data/interim/interactions.parquet
-      - data/interim/items.parquet
-      - data/interim/queries.parquet
     metrics:
       - metrics/ingest_report.json:
           cache: false

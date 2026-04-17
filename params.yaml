@@ -5,9 +5,3 @@ data:
 
 ingest:
   item_views: train-item-views.csv
-  clicks: train-clicks.csv
-  purchases: train-purchases.csv
-  queries: train-queries.csv
-  products: products.csv
-  product_categories: product-categories.csv
-  # min_interactions: 5 # filter users with fewer interactions than this

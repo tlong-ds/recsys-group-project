@@ -1,11 +1,8 @@
 {
-    "n_items": 184047,
-    "n_queries": 923127,
-    "n_interactions": 2381169,
-    "n_sessions": 369691,
+    "n_interactions": 1235380,
+    "n_sessions": 310324,
+    "n_items": 122993,
     "event_type_counts": {
-        "view": 1235380,
-        "click": 1127764,
-        "purchase": 18025
+        "view": 1235380
     }
 }

@@ -1,4 +1,4 @@
-"""Data ingestion script and utilities for raw recommender datasets."""
+"""Data ingestion script and utilities for raw item-view datasets."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ logger = get_logger(__name__)
 
 
 class DataLoader:
-    """Load interactions and optional metadata tables from disk."""
+    """Load session interactions from disk."""
 
     def __init__(
         self,
@@ -34,84 +34,34 @@ class DataLoader:
         return pd.read_csv(path, sep=";")
 
     def ingest(self, params: dict) -> None:
-        """Process raw CSVs and save to interim Parquet files."""
+        """Process item views and save to interim Parquet files."""
         self.interim_path.mkdir(parents=True, exist_ok=True)
 
-        # 1. Process Items
-        products_df = self._load_csv(params["ingest"]["products"])
-        categories_df = self._load_csv(params["ingest"]["product_categories"])
+        # 1. Process Interactions (ONLY item views)
+        views_file = params["ingest"]["item_views"]
+        interactions = self._load_csv(views_file, required=True)
+        interactions["event_type"] = "view"
 
-        items_df = pd.merge(products_df, categories_df, on="itemId", how="left")
-        items_path = self.interim_path / "items.parquet"
-        items_df.to_parquet(items_path, index=False)
-        logger.info(f"Saved items to {items_path}")
-
-        # 2. Process Queries
-        queries_df = self._load_csv(params["ingest"]["queries"])
-        queries_path = self.interim_path / "queries.parquet"
-        queries_df.to_parquet(queries_path, index=False)
-        logger.info(f"Saved queries to {queries_path}")
-
-        # 3. Process Interactions
-        # Combine views, clicks (if mapped), and purchases
-        views_df = self._load_csv(params["ingest"]["item_views"])
-        purchases_df = self._load_csv(params["ingest"]["purchases"])
-        clicks_df = self._load_csv(params["ingest"]["clicks"])
-
-        # Views and purchases have sessionId
-        views_df["event_type"] = "view"
-        purchases_df["event_type"] = "purchase"
-
-        interactions = pd.concat(
-            [
-                views_df[["sessionId", "itemId", "timeframe", "eventdate", "event_type"]],
-                purchases_df[["sessionId", "itemId", "timeframe", "eventdate", "event_type"]],
-            ],
-            ignore_index=True,
-        )
-
-        # Clicks need to be mapped to sessionId via queries
-        if not clicks_df.empty and not queries_df.empty:
-            clicks_with_session = pd.merge(
-                clicks_df,
-                queries_df[["queryId", "sessionId", "eventdate"]],
-                on="queryId",
-                how="inner",
-            )
-            clicks_with_session["event_type"] = "click"
-            # clicks don't have eventdate in the original file, but we get it from queries
-            # we might need to adjust column names if they differ
-            # In clicks_df, we have queryId, timeframe, itemId
-            # In queries_df, we have queryId, sessionId, userId, timeframe, duration, eventdate, ...
-            # The timeframe in clicks_df might be relative to query timeframe? 
-            # Let's check the head output again.
-            # train-clicks.csv: queryId;timeframe;itemId. 1;16338861;24857
-            # train-queries.csv: queryId;sessionId;userId;timeframe;... 1;1;NA;16327074;...
-            # Yes, they both have timeframe.
-            interactions = pd.concat(
-                [
-                    interactions,
-                    clicks_with_session[
-                        ["sessionId", "itemId", "timeframe", "eventdate", "event_type"]
-                    ],
-                ],
-                ignore_index=True,
-            )
-
-        # Sort by sessionId and timeframe
-        interactions = interactions.sort_values(["sessionId", "timeframe"])
+        # Sort by sessionId and timeframe if columns exist
+        sort_cols = []
+        if "sessionId" in interactions.columns:
+            sort_cols.append("sessionId")
+        if "timeframe" in interactions.columns:
+            sort_cols.append("timeframe")
+            
+        if sort_cols:
+            interactions = interactions.sort_values(sort_cols)
 
         interactions_path = self.interim_path / "interactions.parquet"
         interactions.to_parquet(interactions_path, index=False)
-        logger.info(f"Saved interactions to {interactions_path}")
+        logger.info(f"Saved {len(interactions):,} item-view interactions to {interactions_path}")
 
-        # 4. Generate ingest report
+        # 2. Generate ingest report
         report = {
-            "n_items": len(items_df),
-            "n_queries": len(queries_df),
             "n_interactions": len(interactions),
-            "n_sessions": interactions["sessionId"].nunique(),
-            "event_type_counts": interactions["event_type"].value_counts().to_dict(),
+            "n_sessions": interactions["sessionId"].nunique() if "sessionId" in interactions.columns else 0,
+            "n_items": interactions["itemId"].nunique() if "itemId" in interactions.columns else 0,
+            "event_type_counts": {"view": len(interactions)},
         }
 
         report_path = Path("metrics/ingest_report.json")
@@ -125,14 +75,6 @@ class DataLoader:
         path = self.interim_path / "interactions.parquet"
         if not path.exists():
             logger.error(f"Interim interactions not found at {path}. Run ingest first.")
-            raise FileNotFoundError(path)
-        return pd.read_parquet(path)
-
-    def load_items(self) -> pd.DataFrame:
-        """Load processed items from interim storage."""
-        path = self.interim_path / "items.parquet"
-        if not path.exists():
-            logger.error(f"Interim items not found at {path}. Run ingest first.")
             raise FileNotFoundError(path)
         return pd.read_parquet(path)
 
