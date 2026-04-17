@@ -4,6 +4,8 @@ training:
   val_ratio: 0.1
   batch_size: 256
   num_epochs: 10
+  lr: 1.0e-3
+  weight_decay: 1.0e-5
   early_stopping_patience: 5
   top_k: 20
 
