@@ -47,8 +47,8 @@ class ModelRegistry:
         return artifact_path
 
     def latest_model_path(self) -> Path:
-        """Return the latest model artifact path."""
-        latest_model = self.root_path / "latest" / "model.json"
-        if latest_model.exists():
-            return latest_model
+        """Return the latest model artifact directory."""
+        latest_dir = self.root_path / "latest"
+        if (latest_dir / "model.json").exists():
+            return latest_dir
         raise FileNotFoundError("No latest model artifact is registered")

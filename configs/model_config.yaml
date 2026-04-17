@@ -1,7 +1,8 @@
 model:
   name: srgnn
-  version: "0.1.0"
+  version: "0.2.0"
   embedding_dim: 128
   hidden_size: 128
+  step: 1
   max_session_length: 20
-  fallback_weight: 0.15
+  fallback_weight: 0.05

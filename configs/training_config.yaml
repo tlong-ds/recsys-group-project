@@ -1,13 +1,12 @@
 training:
   seed: 42
-  test_ratio: 0.1
-  val_ratio: 0.1
-  batch_size: 256
-  num_epochs: 10
+  batch_size: 128
+  num_epochs: 5
   lr: 1.0e-3
   weight_decay: 1.0e-5
-  early_stopping_patience: 5
+  early_stopping_patience: 2
   top_k: 20
+  num_workers: 0
 
 logging:
   level: INFO
@@ -17,5 +16,7 @@ registry:
   root_path: models/trained
 
 mlflow:
+  enabled: true
   tracking_uri: http://mlflow:5000
   experiment_name: recsys_srgnn
+  run_name: srgnn-parquet-training
