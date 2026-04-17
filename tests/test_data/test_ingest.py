@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from recsys.data.loader import DataLoader
+from recsys.data.ingest import DataLoader
 
 
 class TestDataLoader(unittest.TestCase):
