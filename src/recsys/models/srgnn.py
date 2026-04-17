@@ -9,6 +9,7 @@ from typing import Any
 
 import pandas as pd
 
+# Develop this lightweight to fullframe srgnn
 
 class SRGNNRecommender:
     """Production-facing SR-GNN wrapper with a lightweight graph baseline."""
