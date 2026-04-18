@@ -99,6 +99,96 @@ stages:
       - data/processed/data_stats.json:
           cache: false
 
+  data_version_v1:
+    cmd: python -m recsys.data.pipeline --stage all --config configs/data_config.yaml --params configs/data_versions/v1_strict_filter.yaml
+    deps:
+      - src/recsys/data/pipeline.py
+      - src/recsys/data/ingest.py
+      - src/recsys/data/validator.py
+      - src/recsys/data/preprocessor.py
+      - src/recsys/data/splitter.py
+      - src/recsys/data/training_examples.py
+      - src/recsys/data/stages.py
+      - src/recsys/utils/config.py
+      - configs/data_config.yaml
+      - configs/data_versions/v1_strict_filter.yaml
+      - data/raw/train-item-views.csv
+    outs:
+      - data/versions/v1_strict_filter/interim/interactions.parquet
+      - data/versions/v1_strict_filter/interim/clean_interactions.parquet
+      - data/versions/v1_strict_filter/interim/train_interactions.parquet
+      - data/versions/v1_strict_filter/interim/val_interactions.parquet
+      - data/versions/v1_strict_filter/interim/test_interactions.parquet
+      - data/versions/v1_strict_filter/processed/train_examples.parquet
+      - data/versions/v1_strict_filter/processed/val_examples.parquet
+      - data/versions/v1_strict_filter/processed/test_examples.parquet
+      - data/versions/v1_strict_filter/processed/item_vocab.json
+    metrics:
+      - data/versions/v1_strict_filter/processed/data_stats.json:
+          cache: false
+      - data/versions/v1_strict_filter/validation_report.json:
+          cache: false
+
+  data_version_v2:
+    cmd: python -m recsys.data.pipeline --stage all --config configs/data_config.yaml --params configs/data_versions/v2_sliding_window.yaml
+    deps:
+      - src/recsys/data/pipeline.py
+      - src/recsys/data/ingest.py
+      - src/recsys/data/validator.py
+      - src/recsys/data/preprocessor.py
+      - src/recsys/data/splitter.py
+      - src/recsys/data/training_examples.py
+      - src/recsys/data/stages.py
+      - src/recsys/utils/config.py
+      - configs/data_config.yaml
+      - configs/data_versions/v2_sliding_window.yaml
+      - data/raw/train-item-views.csv
+    outs:
+      - data/versions/v2_sliding_window/interim/interactions.parquet
+      - data/versions/v2_sliding_window/interim/clean_interactions.parquet
+      - data/versions/v2_sliding_window/interim/train_interactions.parquet
+      - data/versions/v2_sliding_window/interim/val_interactions.parquet
+      - data/versions/v2_sliding_window/interim/test_interactions.parquet
+      - data/versions/v2_sliding_window/processed/train_examples.parquet
+      - data/versions/v2_sliding_window/processed/val_examples.parquet
+      - data/versions/v2_sliding_window/processed/test_examples.parquet
+      - data/versions/v2_sliding_window/processed/item_vocab.json
+    metrics:
+      - data/versions/v2_sliding_window/processed/data_stats.json:
+          cache: false
+      - data/versions/v2_sliding_window/validation_report.json:
+          cache: false
+
+  data_version_v3:
+    cmd: python -m recsys.data.pipeline --stage all --config configs/data_config.yaml --params configs/data_versions/v3_train_plus_val.yaml
+    deps:
+      - src/recsys/data/pipeline.py
+      - src/recsys/data/ingest.py
+      - src/recsys/data/validator.py
+      - src/recsys/data/preprocessor.py
+      - src/recsys/data/splitter.py
+      - src/recsys/data/training_examples.py
+      - src/recsys/data/stages.py
+      - src/recsys/utils/config.py
+      - configs/data_config.yaml
+      - configs/data_versions/v3_train_plus_val.yaml
+      - data/raw/train-item-views.csv
+    outs:
+      - data/versions/v3_train_plus_val/interim/interactions.parquet
+      - data/versions/v3_train_plus_val/interim/clean_interactions.parquet
+      - data/versions/v3_train_plus_val/interim/train_interactions.parquet
+      - data/versions/v3_train_plus_val/interim/val_interactions.parquet
+      - data/versions/v3_train_plus_val/interim/test_interactions.parquet
+      - data/versions/v3_train_plus_val/processed/train_examples.parquet
+      - data/versions/v3_train_plus_val/processed/val_examples.parquet
+      - data/versions/v3_train_plus_val/processed/test_examples.parquet
+      - data/versions/v3_train_plus_val/processed/item_vocab.json
+    metrics:
+      - data/versions/v3_train_plus_val/processed/data_stats.json:
+          cache: false
+      - data/versions/v3_train_plus_val/validation_report.json:
+          cache: false
+
   train:
     cmd: python -m recsys.training.pipeline --stage train --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params params.yaml
     params:
