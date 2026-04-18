@@ -19,10 +19,17 @@ Key settings:
 - `port`: Serving port (default: `8000`)
 - `model_path`: Path to the trained model directory or file (default: `models/trained/latest/`)
 - `default_top_k`: Default number of recommendations to return.
+- `model_registry.enabled`: Use MLflow Model Registry for model resolution.
+- `model_registry.model_name`: Registered model name in MLflow.
+- `model_registry.model_alias` or `model_registry.model_version`: Selector for deployable model.
+- `model_registry.artifact_path`: Artifact directory downloaded from selected run (default: `registered_model`).
+- `model_registry.fallback_to_filesystem`: If `true`, serving falls back to `model_path` when registry resolution fails.
 
 ## Endpoints
 - `GET /health`: Returns the health status of the API and the loaded model path.
 - `POST /recommend`: Accepts a sequence of items (`item_sequence`) and returns a list of recommended items for the session.
+
+When model registry loading is enabled, `/health` also exposes model source metadata (name/version/alias/run id).
 
 ## Running Locally
 To run the server locally, you can use the provided CLI entrypoint or Docker Compose:

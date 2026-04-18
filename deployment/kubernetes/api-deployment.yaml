@@ -21,3 +21,8 @@ spec:
           env:
             - name: RECSYS_MODEL_PATH
               value: /app/models/trained/latest/
+            - name: DAGSHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: recsys-secrets
+                  key: dagshub-token

@@ -4,3 +4,20 @@ serving:
   reload: false
   model_path: models/trained/latest/
   default_top_k: 10
+  model_registry:
+    enabled: false
+    model_name: recsys-srgnn
+    model_alias: Production
+    model_version: ""
+    artifact_path: registered_model
+    fallback_to_filesystem: true
+
+mlflow:
+  enabled: true
+  tracking_uri: ""
+  experiment_name: recsys_srgnn
+  dagshub:
+    enabled: true
+    token_env_var: DAGSHUB_TOKEN
+    repo_owner: lytlong.pers
+    repo_name: recsys-group-project

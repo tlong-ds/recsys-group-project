@@ -62,6 +62,26 @@ mlflow:
 export DAGSHUB_TOKEN=<your_personal_access_token>
 ```
 
+## MLflow system metrics
+
+Enable MLflow system metrics collection by config:
+
+```yaml
+mlflow:
+  system_metrics:
+    enabled: true
+    sampling_interval: 10
+    samples_before_logging: 1
+```
+
+Install host dependencies for system metrics:
+
+```bash
+pip install psutil
+# optional GPU metrics:
+pip install nvidia-ml-py
+```
+
 ## Model scope
 
 The repo is structured for a session-based recommender. The production-facing

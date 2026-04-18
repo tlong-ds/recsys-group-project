@@ -6,6 +6,7 @@ import argparse
 import os
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
@@ -24,27 +25,76 @@ RECSYS_RECOMMENDATIONS_TOTAL = Counter(
 )
 
 
-def create_app(model_path: str | Path | None = None) -> FastAPI:
+def create_app(
+    model_path: str | Path | None = None,
+    serving_config: dict[str, Any] | None = None,
+    mlflow_config: dict[str, Any] | None = None,
+) -> FastAPI:
     """Create a FastAPI app bound to a specific model artifact."""
-    resolved_model_path = str(model_path or _resolve_model_path())
+    config_serving = serving_config or {}
+    config_mlflow = mlflow_config or {}
+    resolved_model_path = str(model_path or config_serving.get("model_path") or _resolve_model_path())
     app = FastAPI(title="RecSys API", version="0.1.0")
 
     # Instrument with Prometheus
     Instrumentator().instrument(app).expose(app)
 
     @lru_cache(maxsize=1)
-    def get_predictor() -> Predictor:
-        return Predictor.from_path(resolved_model_path)
+    def get_predictor_bundle() -> tuple[Predictor, dict[str, str]]:
+        registry_cfg = config_serving.get("model_registry", {})
+        if isinstance(registry_cfg, dict) and bool(registry_cfg.get("enabled", False)):
+            model_name = str(registry_cfg.get("model_name", "recsys-srgnn"))
+            model_alias = registry_cfg.get("model_alias")
+            model_version = registry_cfg.get("model_version")
+            artifact_path = str(registry_cfg.get("artifact_path", "registered_model"))
+            try:
+                return Predictor.from_model_registry(
+                    mlflow_config=config_mlflow,
+                    model_name=model_name,
+                    model_alias=str(model_alias) if model_alias else None,
+                    model_version=str(model_version) if model_version else None,
+                    artifact_path=artifact_path,
+                )
+            except Exception:
+                if not bool(registry_cfg.get("fallback_to_filesystem", True)):
+                    raise
+
+        predictor = Predictor.from_path(resolved_model_path)
+        return predictor, {
+            "source": "filesystem",
+            "artifact_path": resolved_model_path,
+            "model_name": "",
+            "model_version": "",
+            "model_alias": "",
+            "run_id": "",
+        }
 
     @app.get("/health")
     def health() -> dict[str, str]:
-        status = "ok" if Path(resolved_model_path).exists() else "degraded"
-        return {"status": status, "model_path": resolved_model_path}
+        try:
+            _, meta = get_predictor_bundle()
+            return {
+                "status": "ok",
+                "model_source": meta.get("source", ""),
+                "model_path": meta.get("artifact_path", resolved_model_path),
+                "model_name": meta.get("model_name", ""),
+                "model_version": meta.get("model_version", ""),
+                "model_alias": meta.get("model_alias", ""),
+                "run_id": meta.get("run_id", ""),
+            }
+        except Exception as exc:
+            return {
+                "status": "degraded",
+                "model_source": "unavailable",
+                "model_path": resolved_model_path,
+                "error": str(exc),
+            }
 
     @app.post("/recommend", response_model=RecommendResponse)
     def recommend(request: RecommendRequest) -> RecommendResponse:
         try:
-            recommendations = get_predictor().get_recommendations(
+            predictor, _ = get_predictor_bundle()
+            recommendations = predictor.get_recommendations(
                 request.item_sequence,
                 top_k=request.top_k,
             )
@@ -72,6 +122,7 @@ def main() -> None:
 
     config = load_config(args.config)
     serving_config = config.get("serving", {})
+    mlflow_config = config.get("mlflow", {})
     host = args.host or serving_config.get("host", "0.0.0.0")
     port = args.port or int(serving_config.get("port", 8000))
     model_path = args.model_path or serving_config.get("model_path")
@@ -79,7 +130,11 @@ def main() -> None:
     if model_path:
         os.environ["RECSYS_MODEL_PATH"] = str(model_path)
 
-    app_target: str | FastAPI = "recsys.serving.api:app" if reload_flag else create_app(model_path)
+    app_target: str | FastAPI = (
+        "recsys.serving.api:app"
+        if reload_flag
+        else create_app(model_path=model_path, serving_config=serving_config, mlflow_config=mlflow_config)
+    )
     uvicorn.run(app_target, host=host, port=port, reload=reload_flag)
 
 
@@ -92,4 +147,8 @@ def _resolve_model_path() -> str:
     return "models/trained/latest/"
 
 
-app = create_app()
+_default_config = load_config(DEFAULT_CONFIG_PATH) if DEFAULT_CONFIG_PATH.exists() else {}
+app = create_app(
+    serving_config=_default_config.get("serving", {}),
+    mlflow_config=_default_config.get("mlflow", {}),
+)
