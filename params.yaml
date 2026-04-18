@@ -19,6 +19,8 @@ data:
     example_order: reverse
 
 model:
+  type: srgnn
+  variant: srgnn
   name: srgnn
   version: "0.1.0"
   embedding_dim: 128
@@ -26,6 +28,22 @@ model:
   step: 1
   max_session_length: 20
   fallback_weight: 0.15
+  score_chunk_size: 512
 
 training:
   top_k: 20
+
+experiments:
+  data_versions:
+    - v1_strict_filter
+    - v2_sliding_window
+    - v3_train_plus_val
+  model_profiles:
+    - srgnn
+    - srgnn_ngc
+    - srgnn_fc
+    - srgnn_l
+    - srgnn_avg
+    - srgnn_att
+    - tagnn
+    - ggnn

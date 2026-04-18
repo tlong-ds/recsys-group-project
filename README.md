@@ -35,6 +35,8 @@ recsys-process-data --stage all --config configs/data_config.yaml --params param
 recsys-train --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params params.yaml
 recsys-serve --config configs/serving_config.yaml
 dvc repro train evaluate
+# Full matrix: 3 data versions × 8 model profiles (24 train + 24 evaluate stages)
+dvc repro train_matrix evaluate_matrix
 ```
 
 ## Versioned data pipelines (V1/V2/V3)
@@ -67,6 +69,34 @@ Train/evaluate with a specific data version:
 python -m recsys.training.pipeline --stage train --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params configs/data_versions/v1_strict_filter.yaml
 python -m recsys.training.pipeline --stage evaluate --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params configs/data_versions/v1_strict_filter.yaml
 ```
+
+## Model matrix training with DVC
+
+Model profiles are defined in `configs/model_profiles/*.yaml`:
+
+- `srgnn`, `srgnn_ngc`, `srgnn_fc`, `srgnn_l`, `srgnn_avg`, `srgnn_att`, `tagnn`, `ggnn`
+
+Data versions are defined in `configs/data_versions/*.yaml`:
+
+- `v1_strict_filter`, `v2_sliding_window`, `v3_train_plus_val`
+
+Run the full cross-product:
+
+```bash
+dvc repro train_matrix evaluate_matrix
+```
+
+Run one specific job:
+
+```bash
+dvc repro train_matrix@v2_sliding_window-tagnn evaluate_matrix@v2_sliding_window-tagnn
+```
+
+Artifacts and metrics are separated per job:
+
+- `models/experiments/<data_version>/<model_profile>/latest/`
+- `metrics/experiments/<data_version>/<model_profile>/training_metrics.json`
+- `metrics/experiments/<data_version>/<model_profile>/evaluation_metrics.json`
 
 For V3 (`val_days: 0`), validation is intentionally empty and early stopping is
 disabled by design. Tune `training.num_epochs` carefully for this setup.

@@ -253,6 +253,21 @@ def main() -> None:
         action="store_true",
         help="Disable versioned registry dirs for deterministic DVC outputs.",
     )
+    parser.add_argument(
+        "--registry-root",
+        default=None,
+        help="Override registry root path for this run.",
+    )
+    parser.add_argument(
+        "--train-metrics-path",
+        default=None,
+        help="Override training metrics JSON output path.",
+    )
+    parser.add_argument(
+        "--evaluation-metrics-path",
+        default=None,
+        help="Override evaluation metrics JSON output path.",
+    )
     args = parser.parse_args()
 
     config = load_training_runtime_config(
@@ -263,6 +278,16 @@ def main() -> None:
     )
     if args.dvc_mode:
         config.setdefault("training", {})["dvc_mode"] = True
+    if args.registry_root:
+        config.setdefault("registry", {})["root_path"] = str(args.registry_root)
+    if args.train_metrics_path:
+        config.setdefault("training", {})["train_metrics_path"] = str(
+            args.train_metrics_path
+        )
+    if args.evaluation_metrics_path:
+        config.setdefault("training", {})["evaluation_metrics_path"] = str(
+            args.evaluation_metrics_path
+        )
 
     if args.stage == STAGE_ALL:
         result = run_training_pipeline(config)

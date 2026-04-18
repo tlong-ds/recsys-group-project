@@ -242,3 +242,139 @@ stages:
     metrics:
       - metrics/evaluation_metrics.json:
           cache: false
+
+  train_matrix:
+    matrix:
+      data_version:
+        - v1_strict_filter
+        - v2_sliding_window
+        - v3_train_plus_val
+      model_profile:
+        - srgnn
+        - srgnn_ngc
+        - srgnn_fc
+        - srgnn_l
+        - srgnn_avg
+        - srgnn_att
+        - tagnn
+        - ggnn
+    cmd: >
+      python -m recsys.training.pipeline --stage train --dvc-mode
+      --data-config configs/data_config.yaml
+      --model-config configs/model_profiles/${item.model_profile}.yaml
+      --training-config configs/training_config.yaml
+      --params configs/data_versions/${item.data_version}.yaml
+      --registry-root models/experiments/${item.data_version}/${item.model_profile}
+      --train-metrics-path metrics/experiments/${item.data_version}/${item.model_profile}/training_metrics.json
+      --evaluation-metrics-path metrics/experiments/${item.data_version}/${item.model_profile}/evaluation_metrics.json
+    params:
+      - configs/data_versions/${item.data_version}.yaml:
+          - data.train_examples_path
+          - data.val_examples_path
+          - data.item_vocab_path
+          - data.temporal_split.val_days
+      - configs/model_profiles/${item.model_profile}.yaml:
+          - model.type
+          - model.variant
+          - model.name
+          - model.version
+          - model.embedding_dim
+          - model.hidden_size
+          - model.step
+          - model.max_session_length
+          - model.fallback_weight
+          - model.score_chunk_size
+      - configs/training_config.yaml:
+          - training.seed
+          - training.batch_size
+          - training.num_epochs
+          - training.lr
+          - training.weight_decay
+          - training.early_stopping_patience
+          - training.top_k
+          - training.num_workers
+    deps:
+      - src/recsys/training/pipeline.py
+      - src/recsys/training/trainer.py
+      - src/recsys/training/registry.py
+      - src/recsys/training/tracking.py
+      - src/recsys/training/mlflow_registry.py
+      - src/recsys/models/graph_helpers.py
+      - src/recsys/models/srgnn.py
+      - src/recsys/models/tagnn.py
+      - src/recsys/models/ggnn.py
+      - src/recsys/evaluation/evaluator.py
+      - src/recsys/evaluation/metrics.py
+      - src/recsys/utils/config.py
+      - configs/data_config.yaml
+      - configs/model_profiles/${item.model_profile}.yaml
+      - configs/training_config.yaml
+      - configs/data_versions/${item.data_version}.yaml
+      - data/versions/${item.data_version}/processed/train_examples.parquet
+      - data/versions/${item.data_version}/processed/val_examples.parquet
+      - data/versions/${item.data_version}/processed/item_vocab.json
+    outs:
+      - models/experiments/${item.data_version}/${item.model_profile}/latest
+    metrics:
+      - metrics/experiments/${item.data_version}/${item.model_profile}/training_metrics.json:
+          cache: false
+
+  evaluate_matrix:
+    matrix:
+      data_version:
+        - v1_strict_filter
+        - v2_sliding_window
+        - v3_train_plus_val
+      model_profile:
+        - srgnn
+        - srgnn_ngc
+        - srgnn_fc
+        - srgnn_l
+        - srgnn_avg
+        - srgnn_att
+        - tagnn
+        - ggnn
+    cmd: >
+      python -m recsys.training.pipeline --stage evaluate --dvc-mode
+      --data-config configs/data_config.yaml
+      --model-config configs/model_profiles/${item.model_profile}.yaml
+      --training-config configs/training_config.yaml
+      --params configs/data_versions/${item.data_version}.yaml
+      --registry-root models/experiments/${item.data_version}/${item.model_profile}
+      --train-metrics-path metrics/experiments/${item.data_version}/${item.model_profile}/training_metrics.json
+      --evaluation-metrics-path metrics/experiments/${item.data_version}/${item.model_profile}/evaluation_metrics.json
+    params:
+      - configs/data_versions/${item.data_version}.yaml:
+          - data.test_examples_path
+      - configs/model_profiles/${item.model_profile}.yaml:
+          - model.type
+          - model.variant
+          - model.name
+          - model.version
+          - model.embedding_dim
+          - model.hidden_size
+          - model.step
+          - model.max_session_length
+          - model.fallback_weight
+          - model.score_chunk_size
+      - configs/training_config.yaml:
+          - training.top_k
+    deps:
+      - src/recsys/training/pipeline.py
+      - src/recsys/training/tracking.py
+      - src/recsys/training/registry.py
+      - src/recsys/models/srgnn.py
+      - src/recsys/models/tagnn.py
+      - src/recsys/models/ggnn.py
+      - src/recsys/evaluation/evaluator.py
+      - src/recsys/evaluation/metrics.py
+      - src/recsys/utils/config.py
+      - configs/data_config.yaml
+      - configs/model_profiles/${item.model_profile}.yaml
+      - configs/training_config.yaml
+      - configs/data_versions/${item.data_version}.yaml
+      - models/experiments/${item.data_version}/${item.model_profile}/latest/model.json
+      - data/versions/${item.data_version}/processed/test_examples.parquet
+    metrics:
+      - metrics/experiments/${item.data_version}/${item.model_profile}/evaluation_metrics.json:
+          cache: false
