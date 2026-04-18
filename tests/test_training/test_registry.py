@@ -34,3 +34,19 @@ def test_register_writes_latest_artifact(tmp_path: Path) -> None:
 
     assert artifact_path.exists()
     assert registry.latest_model_path().exists()
+
+
+def test_register_can_skip_versioned_dirs(tmp_path: Path) -> None:
+    model = SRGNNRecommender(embedding_dim=8, hidden_size=8, seed=3).fit(
+        _graph_examples(),
+        num_epochs=1,
+        batch_size=2,
+    )
+
+    registry = ModelRegistry(tmp_path, create_versioned=False)
+    artifact_path = registry.register(model, config={"model": {"name": "srgnn"}}, metrics={})
+
+    latest_model_path = registry.latest_model_path()
+    assert artifact_path.parent == latest_model_path
+    assert (latest_model_path / "model.json").exists()
+    assert not (tmp_path / "srgnn").exists()
