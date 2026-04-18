@@ -37,6 +37,40 @@ recsys-serve --config configs/serving_config.yaml
 dvc repro train evaluate
 ```
 
+## Versioned data pipelines (V1/V2/V3)
+
+Each data version has its own params file and artifact directory so it can be
+tracked independently in DVC.
+
+```bash
+# Build data versions independently
+dvc repro data_version_v1
+dvc repro data_version_v2
+dvc repro data_version_v3
+```
+
+Version definitions:
+
+- V1 strict filter: `configs/data_versions/v1_strict_filter.yaml`
+- V2 sliding-window safety: `configs/data_versions/v2_sliding_window.yaml`
+- V3 train+val merge: `configs/data_versions/v3_train_plus_val.yaml`
+
+Generated artifacts:
+
+- `data/versions/v1_strict_filter/*`
+- `data/versions/v2_sliding_window/*`
+- `data/versions/v3_train_plus_val/*`
+
+Train/evaluate with a specific data version:
+
+```bash
+python -m recsys.training.pipeline --stage train --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params configs/data_versions/v1_strict_filter.yaml
+python -m recsys.training.pipeline --stage evaluate --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params configs/data_versions/v1_strict_filter.yaml
+```
+
+For V3 (`val_days: 0`), validation is intentionally empty and early stopping is
+disabled by design. Tune `training.num_epochs` carefully for this setup.
+
 ## Config ownership and precedence
 
 Runtime config is merged in this order:
