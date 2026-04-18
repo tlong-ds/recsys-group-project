@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -137,6 +138,11 @@ def _write_json(payload: dict[str, Any], path: str | Path) -> Path:
     with open(destination, "w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2)
     return destination
+
+
+def _utc_build_timestamp() -> str:
+    """Return a UTC build timestamp in ISO-8601 format."""
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
 def _build_ingest_params(data_cfg: dict[str, Any]) -> dict[str, Any]:
@@ -485,6 +491,7 @@ def run_build_examples_stage(
     vocab_builder.save(vocab_path)
 
     stats = {
+        "build_date": _utc_build_timestamp(),
         "config_file": str(config_path),
         "train": _stats_block(train_df, train_examples, session_col, item_col),
         "val": _stats_block(val_df, val_examples, session_col, item_col),
