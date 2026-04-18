@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import torch
 
+from recsys.data.pipeline import DataProcessingPipeline
 from recsys.evaluation import Evaluator
 from recsys.models import SRGNNRecommender
 from recsys.training.trainer import Trainer
@@ -20,7 +21,7 @@ from recsys.utils.config import load_config, merge_configs
 from recsys.utils.logger import get_logger
 
 
-def run_training_pipeline(config: dict[str, Any]) -> dict[str, Any]:
+def run_training_pipeline(config: dict[str, Any], data_config_path: str | Path) -> dict[str, Any]:
     """Execute training directly from processed parquet examples."""
     logger = get_logger()
     data_config = config.get("data", {})
@@ -30,6 +31,8 @@ def run_training_pipeline(config: dict[str, Any]) -> dict[str, Any]:
 
     seed = int(training_config.get("seed", 42))
     _set_seed(seed)
+
+    _run_data_pipeline(data_config_path, logger)
 
     train_df = _load_examples(
         _resolve_path(data_config.get("train_examples_path", "data/processed/train_examples.parquet"))
@@ -96,8 +99,20 @@ def main() -> None:
         load_config(args.model_config),
         load_config(args.training_config),
     )
-    result = run_training_pipeline(config)
+    result = run_training_pipeline(config, data_config_path=args.data_config)
     print(result)
+
+
+def _run_data_pipeline(data_config_path: str | Path, logger) -> None:
+    """Run the full data processing pipeline before training."""
+    logger.info("Running data pipeline from config: {}", data_config_path)
+    try:
+        pipeline = DataProcessingPipeline(config_path=data_config_path)
+        outputs = pipeline.run()
+        logger.info("Data pipeline complete, produced {} artifacts.", len(outputs))
+    except Exception as exc:
+        logger.error("Data pipeline failed: {}", exc)
+        raise
 
 
 def _resolve_path(path_value: str) -> Path:

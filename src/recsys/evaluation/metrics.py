@@ -19,16 +19,4 @@ def mrr_at_k(recommended: list[int], relevant: list[int], k: int) -> float:
     return 0.0
 
 
-def ndcg_at_k(recommended: list[int], relevant: list[int], k: int) -> float:
-    """Return normalised discounted cumulative gain for binary relevance."""
-    gains = [
-        1.0 / math.log2(rank + 1)
-        for rank, item in enumerate(recommended[:k], start=1)
-        if item in relevant
-    ]
-    dcg = sum(gains)
-    ideal_hits = min(len(relevant), k)
-    if ideal_hits == 0:
-        return 0.0
-    idcg = sum(1.0 / math.log2(rank + 1) for rank in range(1, ideal_hits + 1))
-    return dcg / idcg
+
