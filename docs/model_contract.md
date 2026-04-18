@@ -57,7 +57,7 @@ _tensors_from_graph()   # builds tensors for recommend_from_graph()
 ```
 Session sequence:  A → B → A → C → B
 
-![alt text](image.png)
+![alt text](srgnn.png)
 
 
 ```
@@ -84,7 +84,7 @@ Session sequence:  A → B → A → C → B
 **Core idea:** Same GNN propagation as SR-GNN, but the readout is **target-aware** — the session representation is re-computed for each candidate item, so the model attends to different parts of the session history depending on what it is trying to predict.
 
 ```
-![alt text](image-1.png)
+![alt text](tagnn.png)
 ```
 
 **Memory:** Naïve batching creates a `(B, L, n_items)` tensor — 4+ GB for a 50 k catalogue. This implementation uses **chunked scoring**: processes `score_chunk_size=512` candidates at a time, keeping peak memory at `(B, L, 512)` while producing identical results.
