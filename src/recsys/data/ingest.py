@@ -23,7 +23,12 @@ class DataLoader:
         self.raw_path = Path(raw_path)
         self.interim_path = Path(interim_path)
 
-    def _load_csv(self, filename: str, required: bool = True) -> pd.DataFrame:
+    def _load_csv(
+        self,
+        filename: str,
+        required: bool = True,
+        csv_params: dict | None = None,
+    ) -> pd.DataFrame:
         path = self.raw_path / filename
         if not path.exists():
             if required:
@@ -31,15 +36,28 @@ class DataLoader:
             logger.warning(f"File not found: {path}")
             return pd.DataFrame()
         logger.info(f"Loading {path}")
-        return pd.read_csv(path, sep=";")
+        read_kwargs = {"sep": ";"}
+        if csv_params:
+            read_kwargs.update(csv_params)
+        return pd.read_csv(path, **read_kwargs)
 
     def ingest(self, params: dict) -> None:
         """Process item views and save to interim Parquet files."""
         self.interim_path.mkdir(parents=True, exist_ok=True)
 
         # 1. Process Interactions (ONLY item views)
-        views_file = params["ingest"]["item_views"]
-        interactions = self._load_csv(views_file, required=True)
+        ingest_cfg = params.get("ingest", {})
+        interactions_file = ingest_cfg.get("interactions_file") or ingest_cfg.get(
+            "item_views",
+            "train-item-views.csv",
+        )
+        csv_params = ingest_cfg.get("csv_params", {})
+
+        interactions = self._load_csv(
+            interactions_file,
+            required=True,
+            csv_params=csv_params,
+        )
         interactions["event_type"] = "view"
 
         # Sort by sessionId and timeframe if columns exist

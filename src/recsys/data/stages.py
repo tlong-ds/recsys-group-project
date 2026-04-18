@@ -141,7 +141,8 @@ def _write_json(payload: dict[str, Any], path: str | Path) -> Path:
 
 def _build_ingest_params(data_cfg: dict[str, Any]) -> dict[str, Any]:
     ingest_defaults = {
-        "item_views": "train-item-views.csv",
+        "interactions_file": data_cfg.get("interactions_file", "train-item-views.csv"),
+        "csv_params": data_cfg.get("csv_params", {}),
     }
     ingest_cfg = ingest_defaults | data_cfg.get("ingest", {})
 
@@ -389,9 +390,14 @@ def _stats_block(
     df: pd.DataFrame,
     examples: pd.DataFrame,
     session_col: str,
+    item_col: str,
 ) -> dict[str, Any]:
     return {
-        "interactions": TrainingExampleBuilder.compute_stats(df, session_col),
+        "interactions": TrainingExampleBuilder.compute_stats(
+            df,
+            session_col=session_col,
+            item_col=item_col,
+        ),
         "examples": len(examples),
     }
 
@@ -480,9 +486,9 @@ def run_build_examples_stage(
 
     stats = {
         "config_file": str(config_path),
-        "train": _stats_block(train_df, train_examples, session_col),
-        "val": _stats_block(val_df, val_examples, session_col),
-        "test": _stats_block(test_df, test_examples, session_col),
+        "train": _stats_block(train_df, train_examples, session_col, item_col),
+        "val": _stats_block(val_df, val_examples, session_col, item_col),
+        "test": _stats_block(test_df, test_examples, session_col, item_col),
         "vocab_size": len(vocab_builder.item2id),
     }
     _write_json(stats, stats_path)

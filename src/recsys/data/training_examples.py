@@ -354,6 +354,7 @@ class TrainingExampleBuilder:
     def compute_stats(
         interactions: pd.DataFrame,
         session_col: str = "session_id",
+        item_col: str = "item_id",
     ) -> dict[str, Any]:
         """Compute statistics about the dataset.
         
@@ -369,7 +370,7 @@ class TrainingExampleBuilder:
         return {
             "n_interactions": len(interactions),
             "n_sessions": interactions[session_col].nunique(),
-            "n_items": interactions["item_id"].nunique() if "item_id" in interactions else 0,
+            "n_items": interactions[item_col].nunique() if item_col in interactions else 0,
             "avg_session_length": float(session_lengths.mean()),
             "min_session_length": int(session_lengths.min()),
             "max_session_length": int(session_lengths.max()),
