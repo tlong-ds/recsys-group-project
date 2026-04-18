@@ -113,41 +113,13 @@ MLflow configuration:
 - `mlflow.experiment_name`
 - `mlflow.run_name`
 
-Operational note:
-- the current default `tracking_uri` is `http://mlflow:5000`
-- this hostname works when training runs in an environment that can resolve the
-  Docker Compose service name `mlflow`
-- local host execution may need a different URI or `mlflow.enabled: false`
 
-## 7. Model Interface Contract
 
-The package-level model contract is implemented by `SRGNNRecommender`.
-
-Required capabilities:
-- fit on processed training examples
-- score candidate items for a session
-- return top-k recommendations for a session
-- save a portable artifact to disk
-- load the artifact back for inference
-
-Public methods currently relied on by training and serving:
-- `fit(train_df, ...)`
-- `recommend(item_sequence, top_k=10)`
-- `score(item_sequence, item_ids)`
-- `save(directory)`
-- `load(path)`
-
-Serving-facing inference contract:
-- input to `recommend` is a list of original item IDs, not alias indices or raw graph tensors
-- output is a list of original item IDs
-- if the session contains only unknown items or the model is unavailable, the
-  recommender falls back to popularity-based recommendations
-
-## 8. Training Outputs
+## 6. Training Outputs
 
 Training returns and/or writes the following outputs.
 
-### 9.1 Local Model Registry
+### 6.1 Local Model Registry
 
 Default registry root:
 - `models/trained`
@@ -184,7 +156,7 @@ Implication for MLOps and deployment:
 - anything implementing versioned release behavior should prefer the timestamped
   run directory, not the mutable alias
 
-### 8.2 Artifact File Contract
+### 6.2 Artifact File Contract
 
 Required files in a loadable model artifact directory:
 - `model.pt`
@@ -230,7 +202,7 @@ Current note:
 - if downstream automation expects test metrics on disk, that needs an explicit
   contract change
 
-## 9. MLflow Logging Contract
+## 7. MLflow Logging Contract
 
 When `mlflow.enabled` is true, training additionally logs:
 - flattened config parameters
@@ -242,50 +214,3 @@ When `mlflow.enabled` is true, training additionally logs:
 Current MLflow contract is additive:
 - MLflow is observability and lineage support
 - the local filesystem artifact remains the serving source of truth in this repo
-
-## 10. DVC Integration Contract
-
-Current state:
-- DVC tracks the data-processing pipeline through `build_examples`
-- training itself is not yet declared as a DVC stage in `dvc.yaml`
-
-What DVC can currently treat as stable upstream dependencies for training:
-- `configs/data_config.yaml`
-- `configs/model_config.yaml`
-- `configs/training_config.yaml`
-- `data/processed/train_examples.parquet`
-- `data/processed/val_examples.parquet`
-- `data/processed/test_examples.parquet`
-- `data/processed/item_vocab.json`
-- training source files under `src/recsys/training`, `src/recsys/models`, and `src/recsys/evaluation`
-
-Recommended future DVC training stage contract:
-- command should call `recsys-train` or `python -m recsys.training.pipeline`
-- outs should include a versioned model directory, not only `models/trained/latest`
-- metrics should capture both validation and test metrics in a stable file
-
-Important warning for DVC users:
-- `models/trained/latest/` is mutable and unsuitable as the only reproducible artifact
-- for versioned pipelines, capture the timestamped run directory or write to a
-  deterministic run output directory
-
-## 11. Serving Integration Contract
-
-Serving relies on `Predictor.from_path()` and ultimately `SRGNNRecommender.load()`.
-
-Serving may assume:
-- the configured model path points to a directory containing `model.pt` and `model.json`
-- the loaded artifact already contains vocabulary mappings needed to translate
-  between external item IDs and internal indices
-- request payloads use original item IDs
-
-Serving must not assume:
-- access to training parquet files at inference time
-- access to `item_vocab.json` separately from the saved model artifact
-- that `latest/` is immutable
-
-Deployment handoff rule:
-- the unit of deployment is the saved model artifact directory
-- if deploying from local registry, copy the full directory contents together
-
-

@@ -1,6 +1,7 @@
 """Offline evaluator for graph-based next-item prediction."""
 
 from __future__ import annotations
+from pyexpat import model
 
 import pandas as pd
 
@@ -27,7 +28,7 @@ class Evaluator:
   
 
         for row in examples.itertuples(index=False):
-            recommendations = model.recommend_from_graph(row.x, row.alias_inputs, top_k=self.top_k)
+            recommendations = model.recommend_from_graph(row.x, row.edge_index, row.alias_inputs, top_k=self.top_k)
             target_item = int(row.pos_items)
             hr_scores.append(hit_rate_at_k(recommendations, [target_item], self.top_k))
             mrr_scores.append(mrr_at_k(recommendations, [target_item], self.top_k))

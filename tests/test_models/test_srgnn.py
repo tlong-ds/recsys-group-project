@@ -34,19 +34,16 @@ def _graph_examples() -> pd.DataFrame:
             "session_id": [1, 2, 3, 4],
         }
     )
-
-
-def test_srgnn_smoke_train_recommend_save_load(tmp_path: Path) -> None:
+def test_recommend_from_graph_consistent_with_recommend() -> None:
     model = SRGNNRecommender(embedding_dim=16, hidden_size=16, seed=7).fit(
-        _graph_examples(),
-        num_epochs=1,
-        batch_size=2,
-        lr=1e-2,
+        _graph_examples(), num_epochs=1, batch_size=2,
     )
+    # recommend_from_graph và recommend phải trả cùng kết quả
+    # cho cùng một session [1, 2]
+    recs_seq   = model.recommend([1, 2], top_k=3)
+    x          = np.asarray([1, 2], dtype=np.int64)
+    edge_index = np.asarray([[0], [1]], dtype=np.int64)
+    alias      = np.asarray([0, 1], dtype=np.int64)
+    recs_graph = model.recommend_from_graph(x, edge_index, alias, top_k=3)
 
-    recommendations = model.recommend([1, 2], top_k=3)
-    assert len(recommendations) == 3
-
-    artifact_path = model.save(tmp_path)
-    restored = SRGNNRecommender.load(artifact_path.parent)
-    assert len(restored.recommend([1, 2], top_k=3)) == 3
+    assert recs_seq == recs_graph

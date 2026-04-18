@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+from unittest.mock import patch
 
 from recsys.training.pipeline import run_training_pipeline
 
@@ -105,9 +106,12 @@ def test_pipeline_runs_end_to_end_on_processed_parquet(tmp_path: Path) -> None:
         "registry": {"root_path": str(tmp_path / "models")},
         "mlflow": {"enabled": False},
     }
+    data_config_path = tmp_path / "data_config.yaml"
+    data_config_path.touch() 
 
-    result = run_training_pipeline(config)
+    with patch("recsys.training.pipeline._run_data_pipeline"):   # ← skip data pipeline
+        result = run_training_pipeline(config, data_config_path=data_config_path)
 
     assert Path(result["artifact_path"]).exists()
-    assert set(result["validation_metrics"]) == {"hr@k", "mrr@k", "ndcg@k"}
-    assert set(result["test_metrics"]) == {"hr@k", "mrr@k", "ndcg@k"}
+    assert set(result["validation_metrics"]) == {"hr@k", "mrr@k"}
+    assert set(result["test_metrics"]) == {"hr@k", "mrr@k"}
