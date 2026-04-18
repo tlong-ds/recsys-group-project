@@ -232,6 +232,25 @@ must include:
 - release note in PR
 - backward compatibility statement
 
+# 12. How to run data processing
+Run full pipeline:
+
+```bash
+python -m recsys.data.pipeline --stage all --config configs/data_config.yaml
+```
+
+Run each stage:
+
+```bash
+python -m recsys.data.pipeline --stage ingest --config configs/data_config.yaml
+python -m recsys.data.pipeline --stage validate --config configs/data_config.yaml
+python -m recsys.data.pipeline --stage preprocess --config configs/data_config.yaml
+python -m recsys.data.pipeline --stage split --config configs/data_config.yaml
+python -m recsys.data.pipeline --stage build_examples --config configs/data_config.yaml
+```
+
+---
+
 ## 12. Contract Version
 
 - Effective date: 2026-04-16
