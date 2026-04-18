@@ -10,6 +10,8 @@ data:
     val_days: 7
     val_ratio: 0.15
     test_ratio: 0.15
+  augmentation:
+    min_prefix_length: 1
   training_example_format: graph
   parquet_compression: snappy
   compatibility:

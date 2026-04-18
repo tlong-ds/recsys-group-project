@@ -375,11 +375,13 @@ def _build_examples_for_split(
     sequence_order: str,
     output_format: str,
     drop_unknown_items: bool,
+    min_input_length: int,
 ) -> pd.DataFrame:
     if output_format == "graph":
         return example_builder.build_graph_examples(
             split_df,
             vocab=vocab,
+            min_input_length=min_input_length,
             sequence_order=sequence_order,
             drop_unknown_items=drop_unknown_items,
         )
@@ -387,6 +389,7 @@ def _build_examples_for_split(
     return example_builder.build_examples(
         split_df,
         vocab=vocab,
+        min_input_length=min_input_length,
         sequence_order=sequence_order,
         drop_unknown_items=drop_unknown_items,
     )
@@ -443,6 +446,8 @@ def run_build_examples_stage(
 
     sequence_order = compat_cfg.get("example_order", "forward")
     output_format = data_cfg.get("training_example_format", "graph")
+    augmentation_cfg = data_cfg.get("augmentation", {})
+    min_input_length = int(augmentation_cfg.get("min_prefix_length", 1))
 
     train_examples = _build_examples_for_split(
         train_df,
@@ -451,6 +456,7 @@ def run_build_examples_stage(
         sequence_order,
         output_format,
         drop_unknown_items=False,
+        min_input_length=min_input_length,
     )
     val_examples = _build_examples_for_split(
         val_df,
@@ -459,6 +465,7 @@ def run_build_examples_stage(
         sequence_order,
         output_format,
         drop_unknown_items=True,
+        min_input_length=min_input_length,
     )
     test_examples = _build_examples_for_split(
         test_df,
@@ -467,6 +474,7 @@ def run_build_examples_stage(
         sequence_order,
         output_format,
         drop_unknown_items=True,
+        min_input_length=min_input_length,
     )
 
     train_path = _save_dataframe(

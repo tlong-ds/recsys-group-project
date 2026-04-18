@@ -43,10 +43,19 @@ def _deep_merge(base: dict, override: dict) -> None:
 
 
 _DATA_PARAM_KEYS = (
+    "raw_path",
+    "interim_path",
+    "processed_path",
+    "train_examples_path",
+    "val_examples_path",
+    "test_examples_path",
+    "item_vocab_path",
     "validation",
     "temporal_split",
+    "augmentation",
     "training_example_format",
     "parquet_compression",
+    "logging",
     "compatibility",
 )
 _TRAINING_PARAM_KEYS = (

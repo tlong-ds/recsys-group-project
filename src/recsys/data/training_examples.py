@@ -169,6 +169,7 @@ class TrainingExampleBuilder:
         interactions: pd.DataFrame,
         vocab: dict[int, int] | None = None,
         max_session_length: int | None = None,
+        min_input_length: int = 1,
         sequence_order: str = "forward",
         drop_unknown_items: bool = False,
     ) -> pd.DataFrame:
@@ -187,10 +188,14 @@ class TrainingExampleBuilder:
             interactions: Clean interaction DataFrame grouped by session.
             vocab: Optional item vocabulary for encoding. Maps original -> sequential IDs.
             max_session_length: Optional cap on input sequence length.
+            min_input_length: Minimum prefix length for each generated sample.
         
         Returns:
             DataFrame with columns: input_items, target_item, seq_len, session_id, and time column.
         """
+        if min_input_length < 1:
+            raise ValueError("min_input_length must be >= 1")
+
         examples = []
         
         # Group by session
@@ -218,9 +223,9 @@ class TrainingExampleBuilder:
                 timestamps = [ts for _, ts in filtered_pairs]
 
             # Generate training examples from this session
-            indices = range(1, len(seq))
+            indices = range(min_input_length, len(seq))
             if sequence_order == "reverse":
-                indices = range(len(seq) - 1, 0, -1)
+                indices = range(len(seq) - 1, min_input_length - 1, -1)
 
             for i in indices:
                 if sequence_order == "reverse":
@@ -260,6 +265,7 @@ class TrainingExampleBuilder:
         interactions: pd.DataFrame,
         vocab: dict[int, int] | None = None,
         max_session_length: int | None = None,
+        min_input_length: int = 1,
         sequence_order: str = "forward",
         drop_unknown_items: bool = False,
     ) -> pd.DataFrame:
@@ -272,6 +278,9 @@ class TrainingExampleBuilder:
         - item_seq_len: length of input sequence
         - pos_items: next-item label
         """
+        if min_input_length < 1:
+            raise ValueError("min_input_length must be >= 1")
+
         graph_examples = []
 
         for session_id, group in interactions.groupby(self.session_col):
@@ -294,9 +303,9 @@ class TrainingExampleBuilder:
                 seq = [item for item, _ in filtered_pairs]
                 timestamps = [ts for _, ts in filtered_pairs]
 
-            indices = range(1, len(seq))
+            indices = range(min_input_length, len(seq))
             if sequence_order == "reverse":
-                indices = range(len(seq) - 1, 0, -1)
+                indices = range(len(seq) - 1, min_input_length - 1, -1)
 
             for i in indices:
                 input_seq = seq[:i]
@@ -365,7 +374,29 @@ class TrainingExampleBuilder:
         Returns:
             Dictionary of statistics.
         """
+        if interactions.empty or session_col not in interactions.columns:
+            return {
+                "n_interactions": 0,
+                "n_sessions": 0,
+                "n_items": 0,
+                "avg_session_length": 0.0,
+                "min_session_length": 0,
+                "max_session_length": 0,
+                "median_session_length": 0,
+            }
+
         session_lengths = interactions.groupby(session_col).size()
+
+        if session_lengths.empty:
+            return {
+                "n_interactions": len(interactions),
+                "n_sessions": 0,
+                "n_items": interactions[item_col].nunique() if item_col in interactions else 0,
+                "avg_session_length": 0.0,
+                "min_session_length": 0,
+                "max_session_length": 0,
+                "median_session_length": 0,
+            }
         
         return {
             "n_interactions": len(interactions),
