@@ -1,11 +1,11 @@
 stages:
   ingest:
-    cmd: python -m recsys.data.pipeline --stage ingest --config configs/data_config.yaml
+    cmd: python -m recsys.data.pipeline --stage ingest --config configs/data_config.yaml --params params.yaml
     deps:
       - src/recsys/data/pipeline.py
       - src/recsys/data/ingest.py
       - src/recsys/data/stages.py
-      - params.yaml
+      - src/recsys/utils/config.py
       - configs/data_config.yaml
       - data/raw/train-item-views.csv
     outs:
@@ -15,11 +15,17 @@ stages:
           cache: false
 
   validate:
-    cmd: python -m recsys.data.pipeline --stage validate --config configs/data_config.yaml
+    cmd: python -m recsys.data.pipeline --stage validate --config configs/data_config.yaml --params params.yaml
+    params:
+      - params.yaml:
+          - data.validation.min_session_length
+          - data.validation.max_session_length
+          - data.validation.allow_duplicates
     deps:
       - src/recsys/data/pipeline.py
       - src/recsys/data/validator.py
       - src/recsys/data/stages.py
+      - src/recsys/utils/config.py
       - configs/data_config.yaml
       - data/interim/interactions.parquet
     metrics:
@@ -27,22 +33,39 @@ stages:
           cache: false
 
   preprocess:
-    cmd: python -m recsys.data.pipeline --stage preprocess --config configs/data_config.yaml
+    cmd: python -m recsys.data.pipeline --stage preprocess --config configs/data_config.yaml --params params.yaml
+    params:
+      - params.yaml:
+          - data.validation.min_session_length
+          - data.validation.max_session_length
+          - data.validation.min_item_frequency
+          - data.validation.allow_duplicates
+          - data.parquet_compression
     deps:
       - src/recsys/data/pipeline.py
       - src/recsys/data/preprocessor.py
       - src/recsys/data/stages.py
+      - src/recsys/utils/config.py
       - configs/data_config.yaml
       - data/interim/interactions.parquet
     outs:
       - data/interim/clean_interactions.parquet
 
   split:
-    cmd: python -m recsys.data.pipeline --stage split --config configs/data_config.yaml
+    cmd: python -m recsys.data.pipeline --stage split --config configs/data_config.yaml --params params.yaml
+    params:
+      - params.yaml:
+          - data.temporal_split.strategy
+          - data.temporal_split.test_days
+          - data.temporal_split.val_days
+          - data.temporal_split.val_ratio
+          - data.temporal_split.test_ratio
+          - data.parquet_compression
     deps:
       - src/recsys/data/pipeline.py
       - src/recsys/data/splitter.py
       - src/recsys/data/stages.py
+      - src/recsys/utils/config.py
       - configs/data_config.yaml
       - data/interim/clean_interactions.parquet
     outs:
@@ -51,11 +74,18 @@ stages:
       - data/interim/test_interactions.parquet
 
   build_examples:
-    cmd: python -m recsys.data.pipeline --stage build_examples --config configs/data_config.yaml
+    cmd: python -m recsys.data.pipeline --stage build_examples --config configs/data_config.yaml --params params.yaml
+    params:
+      - params.yaml:
+          - data.training_example_format
+          - data.compatibility.vocab_order
+          - data.compatibility.example_order
+          - data.parquet_compression
     deps:
       - src/recsys/data/pipeline.py
       - src/recsys/data/training_examples.py
       - src/recsys/data/stages.py
+      - src/recsys/utils/config.py
       - configs/data_config.yaml
       - data/interim/train_interactions.parquet
       - data/interim/val_interactions.parquet
@@ -67,4 +97,58 @@ stages:
       - data/processed/item_vocab.json
     metrics:
       - data/processed/data_stats.json:
+          cache: false
+
+  train:
+    cmd: python -m recsys.training.pipeline --stage train --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params params.yaml
+    params:
+      - params.yaml:
+          - model.name
+          - model.version
+          - model.embedding_dim
+          - model.hidden_size
+          - model.step
+          - model.max_session_length
+          - model.fallback_weight
+          - training.top_k
+    deps:
+      - src/recsys/training/pipeline.py
+      - src/recsys/training/trainer.py
+      - src/recsys/training/registry.py
+      - src/recsys/training/tracking.py
+      - src/recsys/models/srgnn.py
+      - src/recsys/evaluation/evaluator.py
+      - src/recsys/evaluation/metrics.py
+      - src/recsys/utils/config.py
+      - configs/data_config.yaml
+      - configs/model_config.yaml
+      - configs/training_config.yaml
+      - data/processed/train_examples.parquet
+      - data/processed/val_examples.parquet
+    outs:
+      - models/trained/latest
+    metrics:
+      - metrics/training_metrics.json:
+          cache: false
+
+  evaluate:
+    cmd: python -m recsys.training.pipeline --stage evaluate --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params params.yaml
+    params:
+      - params.yaml:
+          - training.top_k
+    deps:
+      - src/recsys/training/pipeline.py
+      - src/recsys/training/tracking.py
+      - src/recsys/training/registry.py
+      - src/recsys/models/srgnn.py
+      - src/recsys/evaluation/evaluator.py
+      - src/recsys/evaluation/metrics.py
+      - src/recsys/utils/config.py
+      - configs/data_config.yaml
+      - configs/model_config.yaml
+      - configs/training_config.yaml
+      - models/trained/latest/model.json
+      - data/processed/test_examples.parquet
+    metrics:
+      - metrics/evaluation_metrics.json:
           cache: false

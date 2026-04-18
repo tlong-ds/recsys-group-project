@@ -13,8 +13,13 @@ from recsys.models.srgnn import SRGNNRecommender
 class ModelRegistry:
     """Persist model versions under a local filesystem registry."""
 
-    def __init__(self, root_path: str | Path = "models/trained") -> None:
+    def __init__(
+        self,
+        root_path: str | Path = "models/trained",
+        create_versioned: bool = True,
+    ) -> None:
         self.root_path = Path(root_path)
+        self.create_versioned = create_versioned
         self.root_path.mkdir(parents=True, exist_ok=True)
 
     def register(
@@ -24,20 +29,27 @@ class ModelRegistry:
         metrics: dict[str, float] | None = None,
     ) -> Path:
         """Write a timestamped artifact and refresh the latest alias."""
-        timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        run_dir = self.root_path / model.model_name / timestamp
-        run_dir.mkdir(parents=True, exist_ok=True)
-
-        artifact_path = model.save(run_dir)
-        (run_dir / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
-        (run_dir / "metrics.json").write_text(
-            json.dumps(metrics or {}, indent=2),
-            encoding="utf-8",
-        )
-
         latest_dir = self.root_path / "latest"
         latest_dir.mkdir(parents=True, exist_ok=True)
-        model.save(latest_dir)
+        artifact_path: Path
+
+        if self.create_versioned:
+            timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            run_dir = self.root_path / model.model_name / timestamp
+            run_dir.mkdir(parents=True, exist_ok=True)
+            artifact_path = model.save(run_dir)
+            (run_dir / "config.json").write_text(
+                json.dumps(config, indent=2),
+                encoding="utf-8",
+            )
+            (run_dir / "metrics.json").write_text(
+                json.dumps(metrics or {}, indent=2),
+                encoding="utf-8",
+            )
+            model.save(latest_dir)
+        else:
+            artifact_path = model.save(latest_dir)
+
         (latest_dir / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
         (latest_dir / "metrics.json").write_text(
             json.dumps(metrics or {}, indent=2),

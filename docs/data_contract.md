@@ -30,6 +30,11 @@ Entry points:
 
 Primary config file:
 - configs/data_config.yaml
+- Optional overlay for DVC experiment knobs only: params.yaml
+
+Ownership rule:
+- `params.yaml` must not own runtime metadata such as paths, external URLs/endpoints, or registry/tracking destinations.
+- Those values are defined in `configs/*_config.yaml`.
 
 Default paths:
 - Raw: data/raw

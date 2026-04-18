@@ -7,6 +7,8 @@ training:
   early_stopping_patience: 2
   top_k: 20
   num_workers: 0
+  train_metrics_path: metrics/training_metrics.json
+  evaluation_metrics_path: metrics/evaluation_metrics.json
 
 logging:
   level: INFO
@@ -14,9 +16,25 @@ logging:
 
 registry:
   root_path: models/trained
+  create_versioned: true
 
 mlflow:
   enabled: true
-  tracking_uri: http://mlflow:5000
+  tracking_uri: ""
   experiment_name: recsys_srgnn
   run_name: srgnn-parquet-training
+  system_metrics:
+    enabled: false
+    sampling_interval: 10
+    samples_before_logging: 1
+  registry:
+    enabled: false
+    model_name: recsys-srgnn
+    register_alias: Staging
+  dagshub:
+    enabled: true
+    token_env_var: DAGSHUB_TOKEN
+    username_env_var: DAGSHUB_USERNAME
+    password_env_var: DAGSHUB_TOKEN
+    repo_owner: lytlong.pers
+    repo_name: recsys-group-project

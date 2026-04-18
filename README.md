@@ -18,7 +18,6 @@ recsys-group-project/
 ├── models/trained/         # local model registry / exported artifacts
 ├── notebooks/              # EDA only
 ├── src/recsys/             # application package
-├── streamlit_app/          # lightweight demo UI
 ├── tests/                  # unit and smoke tests
 ├── Dockerfile
 ├── docker-compose.yaml
@@ -32,8 +31,35 @@ recsys-group-project/
 ```bash
 pip install -e .[dev]
 python -m unittest discover -s tests -p "test_*.py"
-recsys-train --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml
+recsys-process-data --stage all --config configs/data_config.yaml --params params.yaml
+recsys-train --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params params.yaml
 recsys-serve --config configs/serving_config.yaml
+dvc repro train evaluate
+```
+
+## Config ownership and precedence
+
+Runtime config is merged in this order:
+1. `configs/*.yaml` defaults
+2. `params.yaml` overrides (**experiment knobs only**)
+
+Use `params.yaml` for DVC experiment tuning only (model/data/training hyperparameters). Keep metadata and runtime settings (paths, registry, MLflow URI, DagsHub repo, report destinations) in `configs/*_config.yaml`.
+
+## Optional DagsHub MLflow tracking
+
+```yaml
+# configs/training_config.yaml
+mlflow:
+  enabled: true
+  dagshub:
+    enabled: true
+    token_env_var: DAGSHUB_TOKEN
+    repo_owner: lytlong.pers
+    repo_name: recsys-group-project
+```
+
+```bash
+export DAGSHUB_TOKEN=<your_personal_access_token>
 ```
 
 ## Model scope

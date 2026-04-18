@@ -26,12 +26,21 @@ class Trainer:
  
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
+        training_cfg = self.config.get("training", {})
+        registry_cfg = self.config.get("registry", {})
+        dvc_mode = bool(training_cfg.get("dvc_mode", False))
         registry_root = (
-            self.config.get("registry", {}).get("root_path")
-            or self.config.get("training", {}).get("registry_path")
+            registry_cfg.get("root_path")
+            or training_cfg.get("registry_path")
             or "models/trained"
         )
-        self.registry = ModelRegistry(registry_root)
+        create_versioned = bool(registry_cfg.get("create_versioned", True))
+        if dvc_mode:
+            create_versioned = False
+        self.registry = ModelRegistry(
+            root_path=registry_root,
+            create_versioned=create_versioned,
+        )
  
     def train(
         self,

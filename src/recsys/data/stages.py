@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-import yaml
 from loguru import logger
 
 from recsys.data.ingest import DataLoader
@@ -20,6 +19,7 @@ from recsys.data.splitter import (
 )
 from recsys.data.training_examples import ItemVocabBuilder, TrainingExampleBuilder
 from recsys.data.validator import InteractionValidator
+from recsys.utils.config import load_data_config_with_params
 
 STAGE_ALL = "all"
 STAGE_INGEST = "ingest"
@@ -37,27 +37,14 @@ STAGE_NAMES = [
 ]
 
 
-def _load_data_config(config_path: str | Path = "configs/data_config.yaml") -> dict[str, Any]:
-    path = Path(config_path)
-    with open(path, "r", encoding="utf-8") as handle:
-        loaded = yaml.safe_load(handle) or {}
-
-    data_cfg = loaded.get("data")
-    if not isinstance(data_cfg, dict):
-        raise ValueError(f"Missing 'data' section in config: {path}")
-    return data_cfg
-
-
-def _load_optional_yaml(config_path: str | Path) -> dict[str, Any]:
-    path = Path(config_path)
-    if not path.exists():
-        return {}
-
-    with open(path, "r", encoding="utf-8") as handle:
-        loaded = yaml.safe_load(handle) or {}
-    if not isinstance(loaded, dict):
-        return {}
-    return loaded
+def _load_data_config(
+    config_path: str | Path = "configs/data_config.yaml",
+    params_path: str | Path = "params.yaml",
+) -> dict[str, Any]:
+    return load_data_config_with_params(
+        data_config_path=config_path,
+        params_path=params_path,
+    )
 
 
 def _ensure_data_paths(data_cfg: dict[str, Any]) -> dict[str, Path]:
@@ -85,7 +72,10 @@ def _resolve_column_name(
     return configured
 
 
-def _canonicalize_for_dataset(df: pd.DataFrame, data_cfg: dict[str, Any]) -> pd.DataFrame:
+def _canonicalize_for_dataset(
+    df: pd.DataFrame,
+    data_cfg: dict[str, Any],
+) -> pd.DataFrame:
     col_map = data_cfg.get("columns", {})
     session_col = col_map.get("session_id", "session_id")
     item_col = col_map.get("item_id", "item_id")
@@ -111,7 +101,11 @@ def _canonicalize_for_dataset(df: pd.DataFrame, data_cfg: dict[str, Any]) -> pd.
     return canonical
 
 
-def _save_dataframe(df: pd.DataFrame, path: str | Path, data_cfg: dict[str, Any]) -> Path:
+def _save_dataframe(
+    df: pd.DataFrame,
+    path: str | Path,
+    data_cfg: dict[str, Any],
+) -> Path:
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
 
@@ -145,11 +139,11 @@ def _write_json(payload: dict[str, Any], path: str | Path) -> Path:
     return destination
 
 
-def _build_ingest_params(data_cfg: dict[str, Any], params_cfg: dict[str, Any]) -> dict[str, Any]:
+def _build_ingest_params(data_cfg: dict[str, Any]) -> dict[str, Any]:
     ingest_defaults = {
         "item_views": "train-item-views.csv",
     }
-    ingest_cfg = ingest_defaults | params_cfg.get("ingest", {}) | data_cfg.get("ingest", {})
+    ingest_cfg = ingest_defaults | data_cfg.get("ingest", {})
 
     return {
         "data": {
@@ -166,10 +160,9 @@ def run_ingest_stage(
     params_path: str | Path = "params.yaml",
 ) -> dict[str, str]:
     """Execute ingest stage and return materialized artifacts."""
-    data_cfg = _load_data_config(config_path)
+    data_cfg = _load_data_config(config_path, params_path)
     _ensure_data_paths(data_cfg)
-    params_cfg = _load_optional_yaml(params_path)
-    ingest_params = _build_ingest_params(data_cfg, params_cfg)
+    ingest_params = _build_ingest_params(data_cfg)
 
     loader = DataLoader(
         raw_path=data_cfg.get("raw_path", "data/raw"),
@@ -184,9 +177,12 @@ def run_ingest_stage(
     }
 
 
-def run_validate_stage(config_path: str | Path = "configs/data_config.yaml") -> dict[str, str]:
+def run_validate_stage(
+    config_path: str | Path = "configs/data_config.yaml",
+    params_path: str | Path = "params.yaml",
+) -> dict[str, str]:
     """Execute schema/semantic validation on interim interactions."""
-    data_cfg = _load_data_config(config_path)
+    data_cfg = _load_data_config(config_path, params_path)
     interim = Path(data_cfg.get("interim_path", "data/interim"))
     interactions_path = interim / "interactions.parquet"
 
@@ -196,7 +192,12 @@ def run_validate_stage(config_path: str | Path = "configs/data_config.yaml") -> 
     col_map = data_cfg.get("columns", {})
     session_col = _resolve_column_name(canonical_df, col_map, "session_id", "sessionId")
     item_col = _resolve_column_name(canonical_df, col_map, "item_id", "itemId")
-    event_date_col = _resolve_column_name(canonical_df, col_map, "event_date", "eventdate")
+    event_date_col = _resolve_column_name(
+        canonical_df,
+        col_map,
+        "event_date",
+        "eventdate",
+    )
 
     validator = InteractionValidator(
         session_col=session_col,
@@ -212,15 +213,21 @@ def run_validate_stage(config_path: str | Path = "configs/data_config.yaml") -> 
         allow_duplicates=val_cfg.get("allow_duplicates", False),
     )
 
-    report_path = data_cfg.get("logging", {}).get("report_path") or "metrics/validation_report.json"
+    report_path = (
+        data_cfg.get("logging", {}).get("report_path")
+        or "metrics/validation_report.json"
+    )
     _write_json(report, report_path)
 
     return {"validation_report": str(report_path)}
 
 
-def run_preprocess_stage(config_path: str | Path = "configs/data_config.yaml") -> dict[str, str]:
+def run_preprocess_stage(
+    config_path: str | Path = "configs/data_config.yaml",
+    params_path: str | Path = "params.yaml",
+) -> dict[str, str]:
     """Execute preprocessing and persist cleaned interactions."""
-    data_cfg = _load_data_config(config_path)
+    data_cfg = _load_data_config(config_path, params_path)
     paths = _ensure_data_paths(data_cfg)
 
     raw_df = _load_dataframe(paths["interim"] / "interactions.parquet")
@@ -231,8 +238,18 @@ def run_preprocess_stage(config_path: str | Path = "configs/data_config.yaml") -
 
     session_col = _resolve_column_name(canonical_df, col_map, "session_id", "sessionId")
     item_col = _resolve_column_name(canonical_df, col_map, "item_id", "itemId")
-    event_date_col = _resolve_column_name(canonical_df, col_map, "event_date", "eventdate")
-    timeframe_col = _resolve_column_name(canonical_df, col_map, "timeframe", "timeframe")
+    event_date_col = _resolve_column_name(
+        canonical_df,
+        col_map,
+        "event_date",
+        "eventdate",
+    )
+    timeframe_col = _resolve_column_name(
+        canonical_df,
+        col_map,
+        "timeframe",
+        "timeframe",
+    )
 
     preprocessor = SessionPreprocessor(
         session_col=session_col,
@@ -273,9 +290,12 @@ def run_preprocess_stage(config_path: str | Path = "configs/data_config.yaml") -
     return {"clean_interactions": str(clean_path)}
 
 
-def run_split_stage(config_path: str | Path = "configs/data_config.yaml") -> dict[str, str]:
+def run_split_stage(
+    config_path: str | Path = "configs/data_config.yaml",
+    params_path: str | Path = "params.yaml",
+) -> dict[str, str]:
     """Execute configured temporal split and persist split interactions."""
-    data_cfg = _load_data_config(config_path)
+    data_cfg = _load_data_config(config_path, params_path)
     paths = _ensure_data_paths(data_cfg)
 
     clean_df = _load_dataframe(paths["interim"] / "clean_interactions.parquet")
@@ -365,16 +385,23 @@ def _build_examples_for_split(
     )
 
 
-def _stats_block(df: pd.DataFrame, examples: pd.DataFrame, session_col: str) -> dict[str, Any]:
+def _stats_block(
+    df: pd.DataFrame,
+    examples: pd.DataFrame,
+    session_col: str,
+) -> dict[str, Any]:
     return {
         "interactions": TrainingExampleBuilder.compute_stats(df, session_col),
         "examples": len(examples),
     }
 
 
-def run_build_examples_stage(config_path: str | Path = "configs/data_config.yaml") -> dict[str, str]:
+def run_build_examples_stage(
+    config_path: str | Path = "configs/data_config.yaml",
+    params_path: str | Path = "params.yaml",
+) -> dict[str, str]:
     """Build examples/vocabulary from split interactions and persist outputs."""
-    data_cfg = _load_data_config(config_path)
+    data_cfg = _load_data_config(config_path, params_path)
     paths = _ensure_data_paths(data_cfg)
 
     train_df = _load_dataframe(paths["interim"] / "train_interactions.parquet")
@@ -469,18 +496,29 @@ def run_build_examples_stage(config_path: str | Path = "configs/data_config.yaml
     }
 
 
-def run_full_data_pipeline(config_path: str | Path = "configs/data_config.yaml") -> dict[str, str]:
+def run_full_data_pipeline(
+    config_path: str | Path = "configs/data_config.yaml",
+    params_path: str | Path = "params.yaml",
+) -> dict[str, str]:
     """Run all data stages in order and return all output artifact paths."""
     outputs: dict[str, str] = {}
-    outputs.update(run_ingest_stage(config_path=config_path))
-    outputs.update(run_validate_stage(config_path=config_path))
-    outputs.update(run_preprocess_stage(config_path=config_path))
-    outputs.update(run_split_stage(config_path=config_path))
-    outputs.update(run_build_examples_stage(config_path=config_path))
+    outputs.update(run_ingest_stage(config_path=config_path, params_path=params_path))
+    outputs.update(run_validate_stage(config_path=config_path, params_path=params_path))
+    outputs.update(
+        run_preprocess_stage(config_path=config_path, params_path=params_path)
+    )
+    outputs.update(run_split_stage(config_path=config_path, params_path=params_path))
+    outputs.update(
+        run_build_examples_stage(config_path=config_path, params_path=params_path)
+    )
     return outputs
 
 
-def run_stage(stage: str, config_path: str | Path = "configs/data_config.yaml") -> dict[str, str]:
+def run_stage(
+    stage: str,
+    config_path: str | Path = "configs/data_config.yaml",
+    params_path: str | Path = "params.yaml",
+) -> dict[str, str]:
     """Run a single stage or the full pipeline."""
     stage_runners: dict[str, Any] = {
         STAGE_INGEST: run_ingest_stage,
@@ -491,9 +529,9 @@ def run_stage(stage: str, config_path: str | Path = "configs/data_config.yaml") 
     }
 
     if stage == STAGE_ALL:
-        return run_full_data_pipeline(config_path=config_path)
+        return run_full_data_pipeline(config_path=config_path, params_path=params_path)
     if stage not in stage_runners:
         supported = ", ".join(STAGE_NAMES)
         raise ValueError(f"Unsupported stage '{stage}'. Supported stages: {supported}")
 
-    return stage_runners[stage](config_path=config_path)
+    return stage_runners[stage](config_path=config_path, params_path=params_path)

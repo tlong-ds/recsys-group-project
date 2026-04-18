@@ -1,7 +1,29 @@
 data:
-  raw_dir: data/raw
-  processed_dir: data/processed
-  interim_dir: data/interim
+  validation:
+    min_session_length: 2
+    min_item_frequency: 5
+    max_session_length: 20
+    allow_duplicates: true
+  temporal_split:
+    strategy: diginetica_legacy
+    test_days: 7
+    val_days: 7
+    val_ratio: 0.15
+    test_ratio: 0.15
+  training_example_format: graph
+  parquet_compression: snappy
+  compatibility:
+    vocab_order: first_seen
+    example_order: reverse
 
-ingest:
-  item_views: train-item-views.csv
+model:
+  name: srgnn
+  version: "0.1.0"
+  embedding_dim: 128
+  hidden_size: 128
+  step: 1
+  max_session_length: 20
+  fallback_weight: 0.15
+
+training:
+  top_k: 20

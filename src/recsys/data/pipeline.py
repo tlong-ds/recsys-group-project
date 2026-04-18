@@ -15,8 +15,13 @@ from recsys.data.stages import STAGE_ALL, STAGE_NAMES, run_stage
 class DataProcessingPipeline:
     """Compatibility wrapper around stage-based execution."""
 
-    def __init__(self, config_path: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        config_path: str | Path | None = None,
+        params_path: str | Path | None = None,
+    ) -> None:
         self.config_path = Path(config_path or "configs/data_config.yaml")
+        self.params_path = Path(params_path or "params.yaml")
 
     def run(self, stage: str = STAGE_ALL) -> dict[str, Any]:
         start_time = time.time()
@@ -24,7 +29,11 @@ class DataProcessingPipeline:
         logger.info("Starting data pipeline stage: {}", stage)
         logger.info("=" * 80)
 
-        outputs = run_stage(stage=stage, config_path=self.config_path)
+        outputs = run_stage(
+            stage=stage,
+            config_path=self.config_path,
+            params_path=self.params_path,
+        )
 
         elapsed = time.time() - start_time
         logger.info("Stage '{}' completed in {:.1f}s", stage, elapsed)
@@ -51,6 +60,12 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         choices=STAGE_NAMES,
         help="Pipeline stage to run.",
     )
+    parser.add_argument(
+        "--params",
+        type=Path,
+        default=Path("params.yaml"),
+        help="Path to params overlay file.",
+    )
     return parser
 
 
@@ -60,7 +75,7 @@ def main() -> None:
         logger.error("Config file not found: {}", args.config)
         raise SystemExit(2)
 
-    pipeline = DataProcessingPipeline(config_path=args.config)
+    pipeline = DataProcessingPipeline(config_path=args.config, params_path=args.params)
     try:
         pipeline.run(stage=args.stage)
     except Exception as exc:
