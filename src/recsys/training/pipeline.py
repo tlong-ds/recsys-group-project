@@ -155,12 +155,16 @@ def run_train_stage(config: dict[str, Any]) -> dict[str, Any]:
                     training_result.model,
                     train_df,
                 )
+                output_example = _mlflow_pt2_output_example(
+                    training_result.model,
+                    input_example,
+                )
                 mlflow.pytorch.log_model(
                     training_result.model._core,
                     name="model_core",
                     serialization_format="pt2",
                     input_example=input_example,
-                    signature=_mlflow_pt2_signature(input_example),
+                    signature=_mlflow_pt2_signature(input_example, output_example),
                 )
                 registry_info = register_model_version(
                     config=config,
@@ -427,22 +431,59 @@ def _mlflow_pt2_input_example(
     return tuple(tensors)
 
 
-def _mlflow_pt2_signature(input_example: tuple[torch.Tensor, ...]):
+def _mlflow_pt2_output_example(
+    model: GraphRecommenderBase,
+    input_example: tuple[torch.Tensor, ...],
+) -> tuple[torch.Tensor, ...]:
+    if model._core is None:
+        raise ValueError("Cannot build MLflow pt2 output example without model core.")
+
+    core = model._core
+    was_training = core.training
+    core.eval()
+    with torch.no_grad():
+        outputs = core(*input_example)
+    if was_training:
+        core.train()
+    return _ensure_tensor_tuple(outputs, value_name="MLflow model output")
+
+
+def _mlflow_pt2_signature(
+    input_example: tuple[torch.Tensor, ...],
+    output_example: tuple[torch.Tensor, ...],
+):
     from mlflow.models.signature import ModelSignature
     from mlflow.types.schema import Schema, TensorSpec
 
     return ModelSignature(
-        inputs=Schema(
-            [
-                TensorSpec(
-                    type=_tensor_numpy_dtype(tensor),
-                    shape=tuple(tensor.shape),
-                    name=f"input_{index}",
-                )
-                for index, tensor in enumerate(input_example)
-            ]
-        )
+        inputs=Schema(_tensor_specs(input_example, "input", TensorSpec)),
+        outputs=Schema(_tensor_specs(output_example, "output", TensorSpec)),
     )
+
+
+def _tensor_specs(
+    examples: tuple[torch.Tensor, ...],
+    prefix: str,
+    tensor_spec_cls: Any,
+) -> list[Any]:
+    return [
+        tensor_spec_cls(
+            type=_tensor_numpy_dtype(tensor),
+            shape=tuple(tensor.shape),
+            name=f"{prefix}_{index}",
+        )
+        for index, tensor in enumerate(examples)
+    ]
+
+
+def _ensure_tensor_tuple(values: Any, value_name: str) -> tuple[torch.Tensor, ...]:
+    if isinstance(values, torch.Tensor):
+        return (values,)
+    if isinstance(values, (tuple, list)) and values and all(
+        isinstance(value, torch.Tensor) for value in values
+    ):
+        return tuple(values)
+    raise ValueError(f"{value_name} must be a torch.Tensor or a tuple/list of tensors.")
 
 
 def _tensor_numpy_dtype(tensor: torch.Tensor) -> np.dtype:
