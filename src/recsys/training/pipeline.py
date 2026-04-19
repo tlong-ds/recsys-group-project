@@ -281,21 +281,6 @@ def main() -> None:
         action="store_true",
         help="Disable versioned registry dirs for deterministic DVC outputs.",
     )
-    parser.add_argument(
-        "--registry-root",
-        default=None,
-        help="Override registry root path for this run.",
-    )
-    parser.add_argument(
-        "--train-metrics-path",
-        default=None,
-        help="Override training metrics JSON output path.",
-    )
-    parser.add_argument(
-        "--evaluation-metrics-path",
-        default=None,
-        help="Override evaluation metrics JSON output path.",
-    )
     args = parser.parse_args()
 
     config = load_training_runtime_config(
