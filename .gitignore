@@ -216,3 +216,9 @@ tagnn.png
 srgnn.png
 *.ingest
 mlflow_fresh.db
+
+# DVC-generated training artifacts (local workspace only)
+models/experiments/
+metrics/experiments/
+models/trained/*/latest/
+models/trained/*/[0-9]*T[0-9]*Z/
