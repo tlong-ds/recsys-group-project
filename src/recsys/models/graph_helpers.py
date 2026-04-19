@@ -47,6 +47,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
+from recsys.utils.device import resolve_torch_device
 
 logger = logging.getLogger(__name__)
 
@@ -527,6 +528,7 @@ class GraphRecommenderBase:
         model_name: str | None = None,
         model_version: str = "0.1.0",
         seed: int = 42,
+        device: str | torch.device | None = None,
     ) -> None:
         if hidden_size != embedding_dim:
             logger.warning(
@@ -541,7 +543,7 @@ class GraphRecommenderBase:
         self.model_version      = model_version
         self.seed               = seed
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = resolve_torch_device(device)
         self.n_items: int                 = 0
         self._core: SessionEncoderBase | None = None
         self._item_to_idx: dict[int, int] = {}

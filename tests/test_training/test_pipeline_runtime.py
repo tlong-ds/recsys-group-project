@@ -193,6 +193,8 @@ def test_main_applies_runtime_overrides(monkeypatch: pytest.MonkeyPatch, tmp_pat
             str(tmp_path / "models" / "trained" / "v1_strict_filter"),
             "--train-metrics-path",
             str(tmp_path / "metrics" / "v1" / "training_metrics.json"),
+            "--device",
+            "cpu",
         ],
     )
 
@@ -207,4 +209,5 @@ def test_main_applies_runtime_overrides(monkeypatch: pytest.MonkeyPatch, tmp_pat
     assert config["training"]["train_metrics_path"].endswith(
         "metrics/v1/training_metrics.json"
     )
+    assert config["training"]["device"] == "cpu"
     assert config["lineage"]["data_version"] == "v1_strict_filter"

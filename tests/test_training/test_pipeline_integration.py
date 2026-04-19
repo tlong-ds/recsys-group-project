@@ -150,6 +150,7 @@ def _config(
         "model":    model,
         "training": {
             "seed":                    7,
+            "device":                  "cpu",
             "batch_size":              2,
             "num_epochs":              1,
             "lr":                      1e-2,

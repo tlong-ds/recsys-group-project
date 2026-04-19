@@ -166,6 +166,7 @@ class SRGNNRecommender(GraphRecommenderBase):
         model_version: str = "0.1.0",
         seed: int = 42,
         variant: str = VARIANT_SRGNN,
+        device: str | torch.device | None = None,
     ) -> None:
         if variant not in KNOWN_SRGNN_VARIANTS:
             raise ValueError(
@@ -181,6 +182,7 @@ class SRGNNRecommender(GraphRecommenderBase):
             model_name=model_name if model_name is not None else variant,
             model_version=model_version,
             seed=seed,
+            device=device,
         )
         self.variant = variant
         self._global_freq: dict[tuple[int, int], float] | None = None
@@ -348,12 +350,17 @@ class SRGNNRecommender(GraphRecommenderBase):
     # ------------------------------------------------------------------
 
     @classmethod
-    def load(cls, path: str | Path) -> "SRGNNRecommender":
+    def load(
+        cls, path: str | Path, device: str | torch.device | None = None
+    ) -> "SRGNNRecommender":
         import json as _json
         path      = Path(path)
         directory = path if path.is_dir() else path.parent
         meta_text = (directory / "model.json").read_text(encoding="utf-8")
         meta      = _json.loads(meta_text)
         variant   = str(meta.get("variant", VARIANT_SRGNN))
-        model, _  = cls._load_common(directory, extra_init_kwargs={"variant": variant})
+        model, _  = cls._load_common(
+            directory,
+            extra_init_kwargs={"variant": variant, "device": device},
+        )
         return model   # type: ignore[return-value]

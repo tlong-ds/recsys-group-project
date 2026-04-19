@@ -260,6 +260,7 @@ class TAGNNRecommender(GraphRecommenderBase):
         model_version:    str   = "0.1.0",
         seed:             int   = 42,
         score_chunk_size: int   = DEFAULT_SCORE_CHUNK,
+        device: str | torch.device | None = None,
     ) -> None:
         super().__init__(
             embedding_dim      = embedding_dim,
@@ -270,6 +271,7 @@ class TAGNNRecommender(GraphRecommenderBase):
             model_name         = model_name if model_name is not None else "tagnn",
             model_version      = model_version,
             seed               = seed,
+            device             = device,
         )
         self.score_chunk_size = score_chunk_size
 
@@ -357,8 +359,13 @@ class TAGNNRecommender(GraphRecommenderBase):
             self._core.score_chunk_size = self.score_chunk_size
 
     @classmethod
-    def load(cls, path: str | Path) -> "TAGNNRecommender":
+    def load(
+        cls, path: str | Path, device: str | torch.device | None = None
+    ) -> "TAGNNRecommender":
         path      = Path(path)
         directory = path if path.is_dir() else path.parent
-        model, _  = cls._load_common(directory)
+        model, _  = cls._load_common(
+            directory,
+            extra_init_kwargs={"device": device},
+        )
         return model   # type: ignore[return-value]

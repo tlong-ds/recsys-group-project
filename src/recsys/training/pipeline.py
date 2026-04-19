@@ -72,6 +72,7 @@ def build_model(model_config: dict[str, Any], seed: int) -> GraphRecommenderBase
         fallback_weight    = float(model_config.get("fallback_weight", 0.0)),
         model_version      = str(model_config.get("version", "0.1.0")),
         seed               = seed,
+        device             = model_config.get("device"),
     )
 
     # model_name defaults: explicit > variant (srgnn) > type
@@ -121,6 +122,8 @@ def run_train_stage(config: dict[str, Any]) -> dict[str, Any]:
     val_df     = _load_split_examples(data_config, "val")
     item_vocab = _load_item_vocab(_resolve_item_vocab_path(data_config))
 
+    if "device" not in model_config and training_config.get("device") is not None:
+        model_config = {**model_config, "device": training_config.get("device")}
     model = build_model(model_config, seed)
 
     trainer         = Trainer(config=config)
@@ -150,7 +153,8 @@ def run_train_stage(config: dict[str, Any]) -> dict[str, Any]:
             if training_result.model._core is not None:
                 mlflow.pytorch.log_model(
                     training_result.model._core,
-                    artifact_path="model_core",
+                    name="model_core",
+                    serialization_format="pt2",
                 )
                 registry_info = register_model_version(
                     config=config,
@@ -197,7 +201,8 @@ def run_evaluate_stage(config: dict[str, Any]) -> dict[str, Any]:
 
     model_path    = ModelRegistry(root_path=registry_root).latest_model_path()
     model_type    = str(model_config.get("type", MODEL_TYPE_SRGNN)).lower()
-    model         = _load_model_by_type(model_type, model_path)
+    runtime_device = model_config.get("device") or training_cfg.get("device")
+    model         = _load_model_by_type(model_type, model_path, runtime_device)
     test_examples = _load_split_examples(data_cfg, "test")
 
     evaluator    = Evaluator(top_k=int(training_cfg.get("top_k", 20)))
@@ -235,13 +240,13 @@ def run_training_pipeline(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def _load_model_by_type(
-    model_type: str, model_path: Path
+    model_type: str, model_path: Path, device: str | None = None
 ) -> GraphRecommenderBase:
     if model_type == MODEL_TYPE_TAGNN:
-        return TAGNNRecommender.load(model_path)
+        return TAGNNRecommender.load(model_path, device=device)
     if model_type == MODEL_TYPE_GGNN:
-        return GGNNRecommender.load(model_path)
-    return SRGNNRecommender.load(model_path)
+        return GGNNRecommender.load(model_path, device=device)
+    return SRGNNRecommender.load(model_path, device=device)
 
 
 # ---------------------------------------------------------------------------
@@ -281,6 +286,11 @@ def main() -> None:
         action="store_true",
         help="Disable versioned registry dirs for deterministic DVC outputs.",
     )
+    parser.add_argument(
+        "--device",
+        default=None,
+        help="Execution device override (auto, cpu, mps, cuda, cuda:N).",
+    )
     args = parser.parse_args()
 
     config = load_training_runtime_config(
@@ -304,6 +314,8 @@ def main() -> None:
         config.setdefault("training", {})["evaluation_metrics_path"] = str(
             args.evaluation_metrics_path
         )
+    if args.device:
+        config.setdefault("training", {})["device"] = str(args.device)
 
     if args.stage == STAGE_ALL:
         result = run_training_pipeline(config)
@@ -407,6 +419,8 @@ def _apply_runtime_overrides(config: dict[str, Any], args: argparse.Namespace) -
         config.setdefault("training", {})[
             "evaluation_metrics_path"
         ] = args.evaluation_metrics_path
+    if args.device:
+        config.setdefault("training", {})["device"] = args.device
 
 
 def _attach_lineage_metadata(config: dict[str, Any], args: argparse.Namespace) -> None:

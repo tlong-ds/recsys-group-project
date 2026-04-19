@@ -201,6 +201,7 @@ class GGNNRecommender(GraphRecommenderBase):
         model_name: str | None = None,
         model_version: str = "0.1.0",
         seed: int = 42,
+        device: str | torch.device | None = None,
     ) -> None:
         super().__init__(
             embedding_dim=embedding_dim,
@@ -211,6 +212,7 @@ class GGNNRecommender(GraphRecommenderBase):
             model_name=model_name if model_name is not None else "ggnn",
             model_version=model_version,
             seed=seed,
+            device=device,
         )
 
     # ------------------------------------------------------------------
@@ -281,8 +283,13 @@ class GGNNRecommender(GraphRecommenderBase):
         return {}
 
     @classmethod
-    def load(cls, path: str | Path) -> "GGNNRecommender":
+    def load(
+        cls, path: str | Path, device: str | torch.device | None = None
+    ) -> "GGNNRecommender":
         path      = Path(path)
         directory = path if path.is_dir() else path.parent
-        model, _  = cls._load_common(directory)
+        model, _  = cls._load_common(
+            directory,
+            extra_init_kwargs={"device": device},
+        )
         return model   # type: ignore[return-value]

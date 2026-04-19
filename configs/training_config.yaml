@@ -1,5 +1,6 @@
 training:
   seed: 42
+  device: auto
   batch_size: 128
   num_epochs: 5
   lr: 1.0e-3
