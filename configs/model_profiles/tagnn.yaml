@@ -1,5 +1,6 @@
 model:
   type: tagnn
+  variant: tagnn
   device: auto
   name: tagnn
   version: "0.1.0"
