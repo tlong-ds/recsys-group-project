@@ -12,6 +12,10 @@ spec:
       labels:
         app: recsys-api
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
       containers:
         - name: api
           image: recsys-api:latest
@@ -21,8 +25,38 @@ spec:
           env:
             - name: RECSYS_MODEL_PATH
               value: /app/models/trained/latest/
+            - name: RECSYS_API_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: recsys-secrets
+                  key: api-keys
             - name: DAGSHUB_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: recsys-secrets
                   key: dagshub-token
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL

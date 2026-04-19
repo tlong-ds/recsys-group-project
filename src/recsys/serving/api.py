@@ -9,15 +9,21 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
-from prometheus_client import Counter
+from fastapi import Depends, FastAPI, HTTPException, Response
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from recsys.serving.predictor import Predictor
 from recsys.serving.schemas import RecommendRequest, RecommendResponse
+from recsys.serving.security import (
+    BodySizeLimitMiddleware,
+    SecuritySettings,
+    auth_dependency,
+)
 from recsys.utils.config import load_config
 
 DEFAULT_CONFIG_PATH = Path("configs/serving_config.yaml")
+CONFIG_ENV_VAR = "RECSYS_SERVING_CONFIG"
 
 # Custom metrics
 RECSYS_RECOMMENDATIONS_TOTAL = Counter(
@@ -33,11 +39,29 @@ def create_app(
     """Create a FastAPI app bound to a specific model artifact."""
     config_serving = serving_config or {}
     config_mlflow = mlflow_config or {}
-    resolved_model_path = str(model_path or config_serving.get("model_path") or _resolve_model_path())
-    app = FastAPI(title="RecSys API", version="0.1.0")
+    security_settings = SecuritySettings.from_serving_config(config_serving)
+    verify_api_key = auth_dependency(security_settings)
+    resolved_model_path = str(
+        model_path or config_serving.get("model_path") or _resolve_model_path()
+    )
+    app = FastAPI(
+        title="RecSys API",
+        version="0.1.0",
+        docs_url="/docs" if security_settings.docs_enabled else None,
+        redoc_url="/redoc" if security_settings.docs_enabled else None,
+        openapi_url="/openapi.json" if security_settings.docs_enabled else None,
+    )
+    app.add_middleware(
+        BodySizeLimitMiddleware,
+        max_body_bytes=security_settings.max_body_bytes,
+    )
 
     # Instrument with Prometheus
-    Instrumentator().instrument(app).expose(app)
+    Instrumentator().instrument(app)
+
+    @app.get("/metrics", include_in_schema=False)
+    def metrics(_: str | None = Depends(verify_api_key)) -> Response:
+        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     @lru_cache(maxsize=1)
     def get_predictor_bundle() -> tuple[Predictor, dict[str, str]]:
@@ -76,22 +100,21 @@ def create_app(
             return {
                 "status": "ok",
                 "model_source": meta.get("source", ""),
-                "model_path": meta.get("artifact_path", resolved_model_path),
                 "model_name": meta.get("model_name", ""),
                 "model_version": meta.get("model_version", ""),
                 "model_alias": meta.get("model_alias", ""),
-                "run_id": meta.get("run_id", ""),
             }
-        except Exception as exc:
+        except Exception:
             return {
                 "status": "degraded",
                 "model_source": "unavailable",
-                "model_path": resolved_model_path,
-                "error": str(exc),
             }
 
     @app.post("/recommend", response_model=RecommendResponse)
-    def recommend(request: RecommendRequest) -> RecommendResponse:
+    def recommend(
+        request: RecommendRequest,
+        _: str | None = Depends(verify_api_key),
+    ) -> RecommendResponse:
         try:
             predictor, _ = get_predictor_bundle()
             recommendations = predictor.get_recommendations(
@@ -129,13 +152,24 @@ def main() -> None:
     reload_flag = bool(args.reload or serving_config.get("reload", False))
     if model_path:
         os.environ["RECSYS_MODEL_PATH"] = str(model_path)
+    os.environ[CONFIG_ENV_VAR] = str(args.config)
 
     app_target: str | FastAPI = (
-        "recsys.serving.api:app"
+        "recsys.serving.api:create_default_app"
         if reload_flag
-        else create_app(model_path=model_path, serving_config=serving_config, mlflow_config=mlflow_config)
+        else create_app(
+            model_path=model_path,
+            serving_config=serving_config,
+            mlflow_config=mlflow_config,
+        )
     )
-    uvicorn.run(app_target, host=host, port=port, reload=reload_flag)
+    uvicorn.run(
+        app_target,
+        host=host,
+        port=port,
+        reload=reload_flag,
+        factory=reload_flag,
+    )
 
 
 def _resolve_model_path() -> str:
@@ -147,8 +181,11 @@ def _resolve_model_path() -> str:
     return "models/trained/latest/"
 
 
-_default_config = load_config(DEFAULT_CONFIG_PATH) if DEFAULT_CONFIG_PATH.exists() else {}
-app = create_app(
-    serving_config=_default_config.get("serving", {}),
-    mlflow_config=_default_config.get("mlflow", {}),
-)
+def create_default_app() -> FastAPI:
+    """Create an app from the configured default serving config."""
+    config_path = Path(os.getenv(CONFIG_ENV_VAR, str(DEFAULT_CONFIG_PATH)))
+    default_config = load_config(config_path) if config_path.exists() else {}
+    return create_app(
+        serving_config=default_config.get("serving", {}),
+        mlflow_config=default_config.get("mlflow", {}),
+    )

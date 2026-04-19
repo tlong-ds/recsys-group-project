@@ -6,6 +6,7 @@ services:
       - "8000:8000"
     environment:
       RECSYS_MODEL_PATH: /app/models/trained/latest/model.json
+      RECSYS_API_KEYS: ${RECSYS_API_KEYS:?Set RECSYS_API_KEYS before starting compose}
     volumes:
       - ./configs:/app/configs
       - ./models:/app/models
@@ -38,17 +39,18 @@ services:
         "pip install mlflow==2.12.2 && mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow.db --default-artifact-root /mlflow/artifacts"
       ]
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     volumes:
       - ./deployment/mlflow:/mlflow
 
   prometheus:
     image: prom/prometheus:latest
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./deployment/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - ./deployment/monitoring/alerts.yml:/etc/prometheus/alerts.yml
+      - ./deployment/secrets/recsys-api-key:/etc/prometheus/secrets/recsys-api-key:ro
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
@@ -56,10 +58,10 @@ services:
   grafana:
     image: grafana/grafana:latest
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - ./deployment/monitoring/grafana/provisioning:/etc/grafana/provisioning
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD before starting compose}
     depends_on:
       - prometheus

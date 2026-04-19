@@ -24,19 +24,41 @@ Key settings:
 - `model_registry.model_alias` or `model_registry.model_version`: Selector for deployable model.
 - `model_registry.artifact_path`: Artifact directory downloaded from selected run (default: `registered_model`).
 - `model_registry.fallback_to_filesystem`: If `true`, serving falls back to `model_path` when registry resolution fails.
+- `security.enabled`: Require API-key auth for protected endpoints.
+- `security.api_keys_env_var`: Environment variable containing comma-separated API keys.
+- `security.public_paths`: Paths that stay public. Default: `/health`.
+- `security.rate_limit_per_minute`: Per-key in-memory request limit.
+- `security.max_body_bytes`: Maximum declared request body size.
+- `security.docs_enabled`: Expose or disable FastAPI docs/OpenAPI routes.
 
 ## Endpoints
-- `GET /health`: Returns the health status of the API and the loaded model path.
-- `POST /recommend`: Accepts a sequence of items (`item_sequence`) and returns a list of recommended items for the session.
+- `GET /health`: Public health endpoint with sanitized model status.
+- `POST /recommend`: Authenticated recommendation endpoint.
+- `GET /metrics`: Authenticated Prometheus metrics endpoint.
 
-When model registry loading is enabled, `/health` also exposes model source metadata (name/version/alias/run id).
+When model registry loading is enabled, `/health` exposes only non-sensitive
+source metadata. It does not return local artifact paths, run IDs, or raw
+exceptions.
 
 ## Running Locally
 To run the server locally, you can use the provided CLI entrypoint or Docker Compose:
 ```bash
 # Using Python
+export RECSYS_API_KEYS=local-dev-key
 python -m recsys.serving.api --config configs/serving_config.yaml
 
 # Using Docker Compose
+export RECSYS_API_KEYS=local-dev-key
+export GRAFANA_ADMIN_PASSWORD=<strong-password>
+printf '%s' "$RECSYS_API_KEYS" > deployment/secrets/recsys-api-key
 docker-compose up api
+```
+
+Send protected requests with:
+
+```bash
+curl -H "Authorization: Bearer local-dev-key" \
+  -H "Content-Type: application/json" \
+  -d '{"item_sequence":[101,205,330],"top_k":10}' \
+  http://localhost:8000/recommend
 ```

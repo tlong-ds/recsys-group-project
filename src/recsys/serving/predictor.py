@@ -5,22 +5,21 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from recsys.models.srgnn import SRGNNRecommender
-from recsys.training.tracking import configure_tracking
-
 
 class Predictor:
     """Load a model artifact and serve next-item recommendations."""
 
-    def __init__(self, model: SRGNNRecommender) -> None:
+    def __init__(self, model: Any) -> None:
         self.model = model
 
     @classmethod
-    def from_path(cls, model_path: str) -> "Predictor":
+    def from_path(cls, model_path: str) -> Predictor:
         """Load a persisted model artifact from disk."""
         path = Path(model_path)
         if not path.exists():
             raise FileNotFoundError(f"Model artifact not found at {path}")
+        from recsys.models.srgnn import SRGNNRecommender
+
         return cls(SRGNNRecommender.load(path))
 
     @classmethod
@@ -32,8 +31,10 @@ class Predictor:
         model_alias: str | None = None,
         model_version: str | None = None,
         artifact_path: str = "registered_model",
-    ) -> tuple["Predictor", dict[str, str]]:
-        """Load model metadata from MLflow Registry, then fetch serving artifact from run."""
+    ) -> tuple[Predictor, dict[str, str]]:
+        """Load model metadata from MLflow Registry, then fetch serving artifact."""
+        from recsys.training.tracking import configure_tracking
+
         configure_tracking({"mlflow": mlflow_config})
         client = _mlflow_client()
 
@@ -45,6 +46,8 @@ class Predictor:
             raise ValueError("Either model_alias or model_version must be provided.")
 
         local_path = Path(client.download_artifacts(version.run_id, artifact_path))
+        from recsys.models.srgnn import SRGNNRecommender
+
         predictor = cls(SRGNNRecommender.load(local_path))
         metadata = {
             "source": "mlflow_registry",
@@ -56,7 +59,9 @@ class Predictor:
         }
         return predictor, metadata
 
-    def get_recommendations(self, item_sequence: list[int], top_k: int = 10) -> list[int]:
+    def get_recommendations(
+        self, item_sequence: list[int], top_k: int = 10
+    ) -> list[int]:
         """Return the top-k next-item predictions for a session context."""
         return self.model.recommend(item_sequence, top_k=top_k)
 

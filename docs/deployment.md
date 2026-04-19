@@ -13,8 +13,15 @@ The project includes a `Dockerfile` and a `docker-compose.yaml` file to containe
 
 To start the full stack:
 ```bash
+export RECSYS_API_KEYS=<comma-separated-api-keys>
+export GRAFANA_ADMIN_PASSWORD=<strong-password>
+printf '%s' "${RECSYS_API_KEYS%%,*}" > deployment/secrets/recsys-api-key
 docker-compose up -d
 ```
+
+Compose binds MLflow, Prometheus, and Grafana to `127.0.0.1` by default.
+The API still binds to port `8000` for local clients, but `/recommend` and
+`/metrics` require the bearer token configured in `RECSYS_API_KEYS`.
 
 ## Kubernetes Deployment
 Kubernetes manifests are located in the `deployment/kubernetes/` directory.
@@ -32,10 +39,19 @@ For production, prefer MLflow Model Registry as the deployment source of truth:
 4. Configure serving with `serving.model_registry.enabled=true` and the target alias/version.
 
 Required runtime secrets/environment:
+- `RECSYS_API_KEYS` (comma-separated API keys for serving auth)
 - `DAGSHUB_TOKEN` (or explicit MLflow credentials env vars)
 - any DVC/data storage credentials used by your environment
+
+The Kubernetes `recsys-secrets` Secret must contain:
+- `api-keys`
+- `dagshub-token`
 
 To deploy to a Kubernetes cluster:
 ```bash
 kubectl apply -f deployment/kubernetes/
 ```
+
+The Kubernetes deployment runs as a non-root user, defines health probes and
+resource bounds, and includes a NetworkPolicy that only allows selected
+in-cluster clients such as Prometheus or pods labeled `app=recsys-api-client`.

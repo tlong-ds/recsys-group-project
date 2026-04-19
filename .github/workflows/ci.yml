@@ -22,11 +22,22 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .[dev]
 
-      # - name: Ruff
-      #   run: ruff check src tests streamlit_app
+      - name: Ruff
+        run: ruff check src tests
 
-      # - name: Unit tests
-      #   run: python -m unittest discover -s tests -p "test_*.py"
+      - name: Unit tests
+        env:
+          RECSYS_API_KEYS: ci-test-key
+        run: pytest
 
-      # - name: Compile
-      #   run: python -m compileall src streamlit_app
+      - name: Compile
+        run: python -m compileall src
+
+      - name: Bandit
+        run: bandit -q -r src
+
+      - name: pip-audit
+        run: pip-audit
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
