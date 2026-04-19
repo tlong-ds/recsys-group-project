@@ -1,10 +1,10 @@
 training:
   seed: 42
   device: auto
-  batch_size: 128
+  batch_size: 512
   num_workers: 4
-  pin_memory: auto
-  persistent_workers: auto
+  pin_memory: true
+  persistent_workers: true
   prefetch_factor: 2
   num_epochs: 5
   lr: 1.0e-3

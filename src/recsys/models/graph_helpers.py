@@ -281,28 +281,34 @@ class SessionGraphDataset(Dataset):
     ) -> None:
         if examples.empty:
             raise ValueError("Examples dataframe is empty")
-        self.examples    = examples.reset_index(drop=True)
-        self.variant     = variant
+        normalized = examples.reset_index(drop=True)
+        self.variant = variant
         self.global_freq = global_freq
+        # Store only required columns as array-like buffers to lower worker
+        # memory overhead versus keeping a full DataFrame in each process.
+        self._x_col = normalized["x"].to_numpy(copy=False)
+        self._alias_inputs_col = normalized["alias_inputs"].to_numpy(copy=False)
+        self._edge_index_col = normalized["edge_index"].to_numpy(copy=False)
+        self._pos_items_col = normalized["pos_items"].to_numpy(copy=False)
+        self._item_seq_len_col = normalized["item_seq_len"].to_numpy(copy=False)
 
     def __len__(self) -> int:
-        return len(self.examples)
+        return len(self._x_col)
 
     def __getitem__(self, index: int) -> dict[str, torch.Tensor]:
-        row          = self.examples.iloc[index]
-        x            = _to_int_array(row.x)
-        alias_inputs = _to_int_array(row.alias_inputs)
-        edge_index   = _to_edge_index(row.edge_index)
+        x = _to_int_array(self._x_col[index])
+        alias_inputs = _to_int_array(self._alias_inputs_col[index])
+        edge_index = _to_edge_index(self._edge_index_col[index])
         adjacency    = self._make_adjacency(x, alias_inputs, edge_index, len(x))
 
         sample: dict[str, torch.Tensor] = {
             "items":        torch.tensor(x,            dtype=torch.long),
             "alias_inputs": torch.tensor(alias_inputs, dtype=torch.long),
             "adjacency":    torch.tensor(adjacency,    dtype=torch.float32),
-            "target":       torch.tensor(int(row.pos_items),    dtype=torch.long),
-            "seq_len":      torch.tensor(int(row.item_seq_len), dtype=torch.long),
+            "target":       torch.tensor(int(self._pos_items_col[index]), dtype=torch.long),
+            "seq_len":      torch.tensor(int(self._item_seq_len_col[index]), dtype=torch.long),
         }
-        sample.update(self._extra_fields(row, x, alias_inputs, edge_index))
+        sample.update(self._extra_fields(index, x, alias_inputs, edge_index))
         return sample
 
     def _make_adjacency(
@@ -320,7 +326,7 @@ class SessionGraphDataset(Dataset):
 
     def _extra_fields(
         self,
-        row: Any,
+        index: int,
         x: np.ndarray,
         alias_inputs: np.ndarray,
         edge_index: np.ndarray,
