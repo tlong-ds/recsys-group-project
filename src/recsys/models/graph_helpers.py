@@ -544,6 +544,7 @@ class GraphRecommenderBase:
         self.seed               = seed
 
         self.device = resolve_torch_device(device)
+        self._non_blocking_transfer = False
         self.n_items: int                 = 0
         self._core: SessionEncoderBase | None = None
         self._item_to_idx: dict[int, int] = {}
@@ -600,6 +601,9 @@ class GraphRecommenderBase:
         early_stopping_patience: int = 3,
         item_vocab: Mapping[str, Any] | None = None,
         num_workers: int = 0,
+        pin_memory: bool | str | None = None,
+        persistent_workers: bool | str | None = None,
+        prefetch_factor: int | str | None = None,
     ) -> "GraphRecommenderBase":
         torch.manual_seed(self.seed)
         np.random.seed(self.seed)
@@ -614,23 +618,58 @@ class GraphRecommenderBase:
         _initialize_vocab(self, train_df, item_vocab)
 
         self._core = self._build_core().to(self.device)
+        num_workers = max(int(num_workers), 0)
+        resolved_pin_memory = _resolve_optional_bool(
+            pin_memory,
+            key="pin_memory",
+        )
+        resolved_persistent_workers = _resolve_optional_bool(
+            persistent_workers,
+            key="persistent_workers",
+        )
+        resolved_prefetch_factor = _resolve_optional_int(
+            prefetch_factor,
+            key="prefetch_factor",
+        )
+        pin_memory_enabled = (
+            resolved_pin_memory if resolved_pin_memory is not None else self.device.type == "cuda"
+        )
+        persistent_workers_enabled = (
+            resolved_persistent_workers
+            if resolved_persistent_workers is not None
+            else num_workers > 0
+        )
+        self._non_blocking_transfer = bool(
+            pin_memory_enabled and self.device.type == "cuda"
+        )
+
+        loader_kwargs: dict[str, Any] = {
+            "batch_size": batch_size,
+            "num_workers": num_workers,
+            "collate_fn": collate_graph_batch,
+            "pin_memory": pin_memory_enabled,
+        }
+        if num_workers > 0:
+            loader_kwargs["persistent_workers"] = persistent_workers_enabled
+            if resolved_prefetch_factor is not None:
+                loader_kwargs["prefetch_factor"] = resolved_prefetch_factor
+        elif resolved_prefetch_factor is not None:
+            raise ValueError(
+                "prefetch_factor requires num_workers > 0."
+            )
 
         train_loader = DataLoader(
             self._make_dataset(train_df),
-            batch_size=batch_size,
             shuffle=True,
-            num_workers=num_workers,
-            collate_fn=collate_graph_batch,
+            **loader_kwargs,
         )
 
         val_loader: DataLoader | None = None
         if val_df is not None and not val_df.empty:
             val_loader = DataLoader(
                 self._make_dataset(val_df),
-                batch_size=batch_size,
                 shuffle=False,
-                num_workers=num_workers,
-                collate_fn=collate_graph_batch,
+                **loader_kwargs,
             )
 
         optimizer = torch.optim.Adam(
@@ -687,7 +726,11 @@ class GraphRecommenderBase:
         total_loss, total_n = 0.0, 0
 
         for batch in loader:
-            batch  = _move_batch(batch, self.device)
+            batch  = _move_batch(
+                batch,
+                self.device,
+                non_blocking=self._non_blocking_transfer,
+            )
             scores = self._forward_batch(batch)
             loss   = criterion(scores, batch["targets"])
             optimizer.zero_grad()
@@ -707,7 +750,11 @@ class GraphRecommenderBase:
         total_loss, total_n = 0.0, 0
 
         for batch in loader:
-            batch  = _move_batch(batch, self.device)
+            batch  = _move_batch(
+                batch,
+                self.device,
+                non_blocking=self._non_blocking_transfer,
+            )
             scores = self._forward_batch(batch)
             loss   = criterion(scores, batch["targets"])
             n = int(batch["targets"].size(0))
@@ -981,9 +1028,40 @@ def _popularity_distribution(model: GraphRecommenderBase) -> list[float]:
 
 
 def _move_batch(
-    batch: dict[str, torch.Tensor], device: torch.device
+    batch: dict[str, torch.Tensor],
+    device: torch.device,
+    non_blocking: bool = False,
 ) -> dict[str, torch.Tensor]:
-    return {k: v.to(device) for k, v in batch.items()}
+    return {k: v.to(device, non_blocking=non_blocking) for k, v in batch.items()}
+
+
+def _resolve_optional_bool(value: bool | str | None, *, key: str) -> bool | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in ("", "auto"):
+        return None
+    if text in ("1", "true", "yes", "on"):
+        return True
+    if text in ("0", "false", "no", "off"):
+        return False
+    raise ValueError(
+        f"Invalid {key} value '{value}'. Use true, false, or auto."
+    )
+
+
+def _resolve_optional_int(value: int | str | None, *, key: str) -> int | None:
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if text in ("", "auto"):
+        return None
+    resolved = int(value)
+    if resolved <= 0:
+        raise ValueError(f"{key} must be a positive integer.")
+    return resolved
 
 
 def _build_global_freq(

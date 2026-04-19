@@ -86,6 +86,9 @@ class Trainer:
             "val_df":                   val_df if not val_df.empty else None,
             "item_vocab":               item_vocab,
             "num_workers":              int(training_cfg.get("num_workers",              0)),
+            "pin_memory":               training_cfg.get("pin_memory"),
+            "persistent_workers":       training_cfg.get("persistent_workers"),
+            "prefetch_factor":          training_cfg.get("prefetch_factor"),
         }
 
         fitted_model = model.fit(train_df, **fit_kwargs)

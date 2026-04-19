@@ -454,12 +454,16 @@ stages:
       - configs/training_config.yaml:
           - training.seed
           - training.batch_size
+          - training.device
           - training.num_epochs
           - training.lr
           - training.weight_decay
           - training.early_stopping_patience
           - training.top_k
           - training.num_workers
+          - training.pin_memory
+          - training.persistent_workers
+          - training.prefetch_factor
     deps:
       - src/recsys/training/pipeline.py
       - src/recsys/training/trainer.py
@@ -526,6 +530,7 @@ stages:
           - model.score_chunk_size
       - configs/training_config.yaml:
           - training.top_k
+          - training.device
     deps:
       - src/recsys/training/pipeline.py
       - src/recsys/training/tracking.py
