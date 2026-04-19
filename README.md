@@ -125,6 +125,47 @@ Artifacts and metrics are separated per job:
 For V3 (`val_days: 0`), validation is intentionally empty and early stopping is
 disabled by design. Tune `training.num_epochs` carefully for this setup.
 
+## Artifact commit hygiene and DVC push checks
+
+Training outputs are intentionally split into:
+
+- DVC-managed model artifacts: `models/trained/**/latest/`, `models/experiments/**/latest/`
+- Local-only experiment metrics: `metrics/experiments/**` (git-ignored)
+
+Before committing:
+
+```bash
+git status --short
+```
+
+Expected: source/config/lock changes only (`dvc.yaml`, `dvc.lock`, code/config/docs).
+
+After training and before `dvc push`, confirm whether there are new cache objects:
+
+```bash
+dvc status -c
+```
+
+Then push:
+
+```bash
+dvc push
+```
+
+If push reports `Everything is up to date`, that means the remote already has the
+object hashes referenced by your current `dvc.lock` (or `dvc.lock` did not change
+for those stage outputs).
+
+If you see warnings like `Output ... is missing version info. Cache for it will not be collected`,
+run reproduce for the relevant train stage(s) first so `dvc.lock` gets output hashes:
+
+```bash
+dvc repro train_matrix@v1_strict_filter-srgnn
+git diff -- dvc.lock
+dvc status -c
+dvc push
+```
+
 ## Config ownership and precedence
 
 Runtime config is merged in this order:

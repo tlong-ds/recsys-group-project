@@ -224,7 +224,8 @@ stages:
       - data/versions/v1_strict_filter/processed/item_vocab.json
       - data/versions/v1_strict_filter/processed/data_stats.json
     outs:
-      - models/trained/v1_strict_filter/latest
+      - models/trained/v1_strict_filter/latest:
+          cache: true
     metrics:
       - metrics/v1_strict_filter/training_metrics.json:
           cache: false
@@ -293,7 +294,8 @@ stages:
       - data/versions/v2_sliding_window/processed/item_vocab.json
       - data/versions/v2_sliding_window/processed/data_stats.json
     outs:
-      - models/trained/v2_sliding_window/latest
+      - models/trained/v2_sliding_window/latest:
+          cache: true
     metrics:
       - metrics/v2_sliding_window/training_metrics.json:
           cache: false
@@ -362,7 +364,8 @@ stages:
       - data/versions/v3_train_plus_val/processed/item_vocab.json
       - data/versions/v3_train_plus_val/processed/data_stats.json
     outs:
-      - models/trained/v3_train_plus_val/latest
+      - models/trained/v3_train_plus_val/latest:
+          cache: true
     metrics:
       - metrics/v3_train_plus_val/training_metrics.json:
           cache: false
@@ -487,7 +490,8 @@ stages:
       - data/versions/${item.data_version}/processed/val_examples.parquet
       - data/versions/${item.data_version}/processed/item_vocab.json
     outs:
-      - models/experiments/${item.data_version}/${item.model_profile}/latest
+      - models/experiments/${item.data_version}/${item.model_profile}/latest:
+          cache: true
     metrics:
       - metrics/experiments/${item.data_version}/${item.model_profile}/training_metrics.json:
           cache: false
