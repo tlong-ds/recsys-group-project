@@ -28,8 +28,8 @@ mlflow:
   experiment_name: recsys_srgnn
   run_name: srgnn-parquet-training
   system_metrics:
-    enabled: false
-    sampling_interval: 10
+    enabled: true
+    sampling_interval: 1
     samples_before_logging: 1
   registry:
     enabled: false
