@@ -151,10 +151,15 @@ def run_train_stage(config: dict[str, Any]) -> dict[str, Any]:
                 artifact_path="registered_model",
             )
             if training_result.model._core is not None:
+                input_example = _mlflow_pt2_input_example(
+                    training_result.model,
+                    train_df,
+                )
                 mlflow.pytorch.log_model(
                     training_result.model._core,
                     name="model_core",
                     serialization_format="pt2",
+                    input_example=input_example,
                 )
                 registry_info = register_model_version(
                     config=config,
@@ -408,6 +413,17 @@ def _flatten_dict(data: dict[str, Any], prefix: str = "") -> dict[str, str]:
 
 def _metrics_path(training_cfg: dict[str, Any], key: str, default: str) -> Path:
     return Path(str(training_cfg.get(key, default)))
+
+
+def _mlflow_pt2_input_example(
+    model: GraphRecommenderBase,
+    train_df: pd.DataFrame,
+) -> tuple[torch.Tensor, ...]:
+    if train_df.empty:
+        raise ValueError("Cannot build MLflow pt2 input example from an empty train_df.")
+    row = train_df.iloc[0]
+    tensors = model._tensors_from_graph(row.x, row.edge_index, row.alias_inputs)
+    return tuple(tensors)
 
 
 def _apply_runtime_overrides(config: dict[str, Any], args: argparse.Namespace) -> None:
