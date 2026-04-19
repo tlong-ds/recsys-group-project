@@ -60,7 +60,7 @@ class TestTracking(unittest.TestCase):
             )
         start_run.assert_not_called()
 
-    def test_configure_tracking_maps_dagshub_token_to_mlflow_username(self) -> None:
+    def test_configure_tracking_maps_dagshub_token_to_mlflow_and_sdk_auth(self) -> None:
         config = {
             "mlflow": {
                 "enabled": True,
@@ -69,7 +69,7 @@ class TestTracking(unittest.TestCase):
                     "enabled": True,
                     "repo_owner": "owner",
                     "repo_name": "repo",
-                    "token_env_var": "DAGSHUB_TOKEN",
+                    "token_env_var": "DAGSHUB_USER_TOKEN",
                 },
             }
         }
@@ -78,11 +78,12 @@ class TestTracking(unittest.TestCase):
         previous_password = os.environ.get("MLFLOW_TRACKING_PASSWORD")
 
         try:
-            with patch.dict(os.environ, {"DAGSHUB_TOKEN": "abc123"}, clear=True):
+            with patch.dict(os.environ, {"DAGSHUB_USER_TOKEN": "abc123"}, clear=True):
                 with patch("recsys.training.tracking.mlflow.set_experiment"):
                     with patch.dict("sys.modules", {"dagshub": fake_dagshub}):
                         configure_tracking(config)
                 self.assertEqual(os.environ.get("MLFLOW_TRACKING_PASSWORD"), "abc123")
+                self.assertEqual(os.environ.get("DAGSHUB_USER_TOKEN"), "abc123")
         finally:
             if previous_username is None:
                 os.environ.pop("MLFLOW_TRACKING_USERNAME", None)

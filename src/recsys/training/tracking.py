@@ -112,21 +112,23 @@ def sanitize_metric_key(name: str) -> str:
 
 
 def _configure_mlflow_auth_for_dagshub(dag_cfg: dict[str, Any]) -> None:
-    """Bridge common DagsHub token env vars to MLflow auth env vars."""
-    token_env_name = str(dag_cfg.get("token_env_var", "DAGSHUB_TOKEN"))
+    """Bridge token env vars for both DagsHub SDK and MLflow auth."""
+    token_env_name = str(dag_cfg.get("token_env_var", "DAGSHUB_USER_TOKEN"))
     username_env_name = str(dag_cfg.get("username_env_var", "DAGSHUB_USERNAME"))
-    password_env_name = str(dag_cfg.get("password_env_var", "DAGSHUB_TOKEN"))
+    password_env_name = str(dag_cfg.get("password_env_var", "DAGSHUB_USER_TOKEN"))
 
     username = os.getenv(username_env_name)
-    password = os.getenv(password_env_name)
-    token = os.getenv(token_env_name)
+    token = os.getenv(token_env_name) or os.getenv("DAGSHUB_USER_TOKEN")
+    password = os.getenv(password_env_name) or token
+
+    # dagshub.init() resolves auth from DAGSHUB_USER_TOKEN; map legacy token env if needed.
+    if token and not os.getenv("DAGSHUB_USER_TOKEN"):
+        os.environ["DAGSHUB_USER_TOKEN"] = token
 
     if username and not os.getenv("MLFLOW_TRACKING_USERNAME"):
         os.environ["MLFLOW_TRACKING_USERNAME"] = username
     if password and not os.getenv("MLFLOW_TRACKING_PASSWORD"):
         os.environ["MLFLOW_TRACKING_PASSWORD"] = password
-    if token and not os.getenv("MLFLOW_TRACKING_USERNAME") and not os.getenv("MLFLOW_TRACKING_PASSWORD"):
-        os.environ["MLFLOW_TRACKING_USERNAME"] = token
 
 
 def _training_params(config: dict[str, Any], model: SRGNNRecommender) -> dict[str, Any]:

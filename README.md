@@ -141,13 +141,13 @@ mlflow:
   enabled: true
   dagshub:
     enabled: true
-    token_env_var: DAGSHUB_TOKEN
+    token_env_var: DAGSHUB_USER_TOKEN
     repo_owner: lytlong.pers
     repo_name: recsys-group-project
 ```
 
 ```bash
-export DAGSHUB_TOKEN=<your_personal_access_token>
+export DAGSHUB_USER_TOKEN=<your_personal_access_token>
 ```
 
 ## MLflow system metrics

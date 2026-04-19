@@ -40,12 +40,12 @@ For production, prefer MLflow Model Registry as the deployment source of truth:
 
 Required runtime secrets/environment:
 - `RECSYS_API_KEYS` (comma-separated API keys for serving auth)
-- `DAGSHUB_TOKEN` (or explicit MLflow credentials env vars)
+- `DAGSHUB_USER_TOKEN` (or explicit MLflow credentials env vars)
 - any DVC/data storage credentials used by your environment
 
 The Kubernetes `recsys-secrets` Secret must contain:
 - `api-keys`
-- `dagshub-token`
+- `dagshub-user-token`
 
 To deploy to a Kubernetes cluster:
 ```bash

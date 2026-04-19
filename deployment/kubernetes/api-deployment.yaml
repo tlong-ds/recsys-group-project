@@ -30,11 +30,11 @@ spec:
                 secretKeyRef:
                   name: recsys-secrets
                   key: api-keys
-            - name: DAGSHUB_TOKEN
+            - name: DAGSHUB_USER_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: recsys-secrets
-                  key: dagshub-token
+                  key: dagshub-user-token
           readinessProbe:
             httpGet:
               path: /health
