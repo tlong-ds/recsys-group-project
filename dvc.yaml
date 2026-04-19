@@ -443,6 +443,7 @@ stages:
       - configs/model_profiles/${item.model_profile}.yaml:
           - model.type
           - model.variant
+          - model.device
           - model.name
           - model.version
           - model.embedding_dim
@@ -520,6 +521,7 @@ stages:
       - configs/model_profiles/${item.model_profile}.yaml:
           - model.type
           - model.variant
+          - model.device
           - model.name
           - model.version
           - model.embedding_dim

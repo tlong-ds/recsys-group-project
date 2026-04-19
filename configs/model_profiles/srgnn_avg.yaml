@@ -1,6 +1,7 @@
 model:
   type: srgnn
   variant: srgnn-avg
+  device: auto
   name: srgnn-avg
   version: "0.1.0"
   embedding_dim: 128

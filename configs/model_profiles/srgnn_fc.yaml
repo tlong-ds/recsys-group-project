@@ -1,6 +1,7 @@
 model:
   type: srgnn
   variant: srgnn-fc
+  device: auto
   name: srgnn-fc
   version: "0.1.0"
   embedding_dim: 128

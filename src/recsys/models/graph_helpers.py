@@ -132,10 +132,12 @@ def build_adjacency(
 
     if edge_index.size:
         src, dst = edge_index[0], edge_index[1]
-        for u, v in zip(src.tolist(), dst.tolist(), strict=False):
-            if 0 <= u < n_nodes and 0 <= v < n_nodes:
-                a_out[u, v] += 1.0
-                a_in[v, u]  += 1.0
+        valid = (src >= 0) & (src < n_nodes) & (dst >= 0) & (dst < n_nodes)
+        if np.any(valid):
+            src_valid = src[valid]
+            dst_valid = dst[valid]
+            np.add.at(a_out, (src_valid, dst_valid), 1.0)
+            np.add.at(a_in, (dst_valid, src_valid), 1.0)
 
     out_norm = a_out.sum(axis=1, keepdims=True)
     in_norm  = a_in.sum(axis=1, keepdims=True)
@@ -158,6 +160,7 @@ def build_adjacency_ngc(
     edge_index: np.ndarray,
     n_nodes: int,
     global_freq: dict[tuple[int, int], float] | None,
+    global_row_totals: dict[int, float] | None = None,
     node_items: list[int] | None = None,
 ) -> np.ndarray:
     """SR-GNN-NGC: edge weights rescaled by global co-occurrence frequency.
@@ -176,26 +179,27 @@ def build_adjacency_ngc(
 
     Returns shape (n_nodes, 2 * n_nodes).
     """
+    if global_freq is None or node_items is None:
+        return build_adjacency(alias_inputs, edge_index, n_nodes)
+
     a_in  = np.zeros((n_nodes, n_nodes), dtype=np.float32)
     a_out = np.zeros((n_nodes, n_nodes), dtype=np.float32)
 
     if edge_index.size:
-        # Pre-compute per-item outgoing totals once (O(|freq|) not O(edges × |freq|))
-        row_totals: dict[int, float] = {}
-        if global_freq is not None:
-            for (s, _), cnt in global_freq.items():
-                row_totals[s] = row_totals.get(s, 0.0) + cnt
-
+        row_totals = (
+            global_row_totals
+            if global_row_totals is not None
+            else _build_ngc_row_totals(global_freq)
+        )
         src, dst = edge_index[0], edge_index[1]
         for u, v in zip(src.tolist(), dst.tolist(), strict=False):
             if 0 <= u < n_nodes and 0 <= v < n_nodes:
                 weight = 1.0
-                if global_freq is not None and node_items is not None:
-                    gi = node_items[u] if u < len(node_items) else 0
-                    gj = node_items[v] if v < len(node_items) else 0
-                    uv_count  = global_freq.get((gi, gj), 0.0)
-                    total_out = row_totals.get(gi, 1.0) or 1.0
-                    weight    = uv_count / total_out
+                gi = node_items[u] if u < len(node_items) else 0
+                gj = node_items[v] if v < len(node_items) else 0
+                uv_count  = global_freq.get((gi, gj), 0.0)
+                total_out = row_totals.get(gi, 1.0) or 1.0
+                weight    = uv_count / total_out
                 a_out[u, v] += weight
                 a_in[v, u]  += weight
 
@@ -224,10 +228,10 @@ def build_adjacency_fc(
     fc = np.zeros((n_nodes, n_nodes), dtype=np.float32)
     if alias_inputs.size >= 2:
         unique_nodes = np.unique(alias_inputs)
-        for u in unique_nodes.tolist():
-            for v in unique_nodes.tolist():
-                if u != v and 0 <= u < n_nodes and 0 <= v < n_nodes:
-                    fc[u, v] = 1.0
+        valid_nodes = unique_nodes[(unique_nodes >= 0) & (unique_nodes < n_nodes)]
+        if valid_nodes.size:
+            fc[np.ix_(valid_nodes, valid_nodes)] = 1.0
+            fc[valid_nodes, valid_nodes] = 0.0
 
     fc_norm     = fc.sum(axis=1, keepdims=True)
     fc_normed   = fc / np.where(fc_norm == 0.0, 1.0, fc_norm)
@@ -244,12 +248,18 @@ def build_adjacency_for_variant(
     n_nodes: int,
     variant: str,
     global_freq: dict[tuple[int, int], float] | None = None,
+    global_row_totals: dict[int, float] | None = None,
     node_items: list[int] | None = None,
 ) -> np.ndarray:
     """Dispatch to the correct adjacency builder based on SR-GNN variant."""
     if variant == VARIANT_NGC:
         return build_adjacency_ngc(
-            alias_inputs, edge_index, n_nodes, global_freq, node_items
+            alias_inputs,
+            edge_index,
+            n_nodes,
+            global_freq,
+            global_row_totals,
+            node_items,
         )
     if variant == VARIANT_FC:
         return build_adjacency_fc(alias_inputs, edge_index, n_nodes)
@@ -284,6 +294,7 @@ class SessionGraphDataset(Dataset):
         normalized = examples.reset_index(drop=True)
         self.variant = variant
         self.global_freq = global_freq
+        self.global_row_totals = _build_ngc_row_totals(global_freq)
         # Store only required columns as array-like buffers to lower worker
         # memory overhead versus keeping a full DataFrame in each process.
         self._x_col = normalized["x"].to_numpy(copy=False)
@@ -320,7 +331,7 @@ class SessionGraphDataset(Dataset):
     ) -> np.ndarray:
         return build_adjacency_for_variant(
             alias_inputs, edge_index, n_nodes,
-            self.variant, self.global_freq,
+            self.variant, self.global_freq, self.global_row_totals,
             node_items=x.tolist(),
         )
 
@@ -1142,3 +1153,14 @@ def _build_global_freq(
                 freq[key] = freq.get(key, 0.0) + 1.0
 
     return freq
+
+
+def _build_ngc_row_totals(
+    global_freq: dict[tuple[int, int], float] | None,
+) -> dict[int, float]:
+    if global_freq is None:
+        return {}
+    row_totals: dict[int, float] = {}
+    for (src, _), count in global_freq.items():
+        row_totals[src] = row_totals.get(src, 0.0) + count
+    return row_totals

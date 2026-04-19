@@ -1,5 +1,6 @@
 model:
   type: tagnn
+  device: auto
   name: tagnn
   version: "0.1.0"
   embedding_dim: 128
