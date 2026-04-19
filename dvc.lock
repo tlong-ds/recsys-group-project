@@ -2227,3 +2227,132 @@ stages:
       md5: 7a179d5b9e5d351685b1a2212d3d568e.dir
       size: 14033950
       nfiles: 5
+  train_matrix@v1_strict_filter-ggnn:
+    cmd: "python -m recsys.training.pipeline --stage train --dvc-mode --data-config
+      configs/data_config.yaml --model-config configs/model_profiles/ggnn.yaml --training-config
+      configs/training_config.yaml --params configs/data_versions/v1_strict_filter.yaml
+      --registry-root models/experiments/v1_strict_filter/ggnn --train-metrics-path
+      metrics/experiments/v1_strict_filter/ggnn/training_metrics.json --evaluation-metrics-path
+      metrics/experiments/v1_strict_filter/ggnn/evaluation_metrics.json\n"
+    deps:
+    - path: configs/data_config.yaml
+      hash: md5
+      md5: 27602ba0b6c89de1a609b0ef5ade4546
+      size: 2341
+    - path: configs/data_versions/v1_strict_filter.yaml
+      hash: md5
+      md5: 9f36c501ec5d6b5e90ec77409a4f5f96
+      size: 913
+    - path: configs/model_profiles/ggnn.yaml
+      hash: md5
+      md5: d382fac40ea01968e01d09e64e8b3336
+      size: 206
+    - path: configs/training_config.yaml
+      hash: md5
+      md5: 58ccd51f61bebdccd70d622470dc24c8
+      size: 1024
+    - path: data/versions/v1_strict_filter/processed/item_vocab.json
+      hash: md5
+      md5: 0541b8d488b341e01af36dfb4fcc6e9e
+      size: 903680
+    - path: data/versions/v1_strict_filter/processed/train_examples.parquet
+      hash: md5
+      md5: 710c99602b5797d3f21e868b00dea98d
+      size: 8141046
+    - path: data/versions/v1_strict_filter/processed/val_examples.parquet
+      hash: md5
+      md5: 63d8a0137bcb928b83557681b6cc2957
+      size: 572191
+    - path: src/recsys/evaluation/evaluator.py
+      hash: md5
+      md5: eb8f9b34e9ebb9fd578ac1b3093a4e6e
+      size: 2070
+    - path: src/recsys/evaluation/metrics.py
+      hash: md5
+      md5: 5fb5ba1b1332e47bacc5233390a7f2bc
+      size: 639
+    - path: src/recsys/models/ggnn.py
+      hash: md5
+      md5: 2b1203064da052a5124fc353fec29a23
+      size: 11103
+    - path: src/recsys/models/graph_helpers.py
+      hash: md5
+      md5: ceddea9caa7e2c78cfe56256a297837b
+      size: 44405
+    - path: src/recsys/models/srgnn.py
+      hash: md5
+      md5: 54d560c3b72b998a3c2f9f09b7ae2c9a
+      size: 14160
+    - path: src/recsys/models/tagnn.py
+      hash: md5
+      md5: a27b72432d71077ca8103860d6c1728e
+      size: 14465
+    - path: src/recsys/training/mlflow_registry.py
+      hash: md5
+      md5: bccadfc2be4ddba1ad7b4810c11b02d4
+      size: 3761
+    - path: src/recsys/training/pipeline.py
+      hash: md5
+      md5: bc18ae92c2bcad097a00d685cb1fdedf
+      size: 19806
+    - path: src/recsys/training/registry.py
+      hash: md5
+      md5: 2870f816978f3c5e8553db0a8f5a6492
+      size: 2318
+    - path: src/recsys/training/tracking.py
+      hash: md5
+      md5: 7877b2847e08665acf22fa7eada29f9c
+      size: 6712
+    - path: src/recsys/training/trainer.py
+      hash: md5
+      md5: c7f468c94f907eaf72f09272c65a2c36
+      size: 4518
+    - path: src/recsys/utils/config.py
+      hash: md5
+      md5: ff0a4e12402501bddee9155da25ae8fe
+      size: 4373
+    params:
+      configs/data_versions/v1_strict_filter.yaml:
+        data.item_vocab_path: 
+          data/versions/v1_strict_filter/processed/item_vocab.json
+        data.temporal_split.val_days: 7
+        data.train_examples_path: 
+          data/versions/v1_strict_filter/processed/train_examples.parquet
+        data.val_examples_path: 
+          data/versions/v1_strict_filter/processed/val_examples.parquet
+      configs/model_profiles/ggnn.yaml:
+        model.device: auto
+        model.embedding_dim: 128
+        model.fallback_weight: 0.05
+        model.hidden_size: 128
+        model.max_session_length: 20
+        model.name: ggnn
+        model.score_chunk_size: 512
+        model.step: 1
+        model.type: ggnn
+        model.variant: ggnn
+        model.version: 0.1.0
+      configs/training_config.yaml:
+        training.batch_size: 512
+        training.device: auto
+        training.early_stopping_min_delta: 0.0001
+        training.early_stopping_patience: 2
+        training.lr: 0.001
+        training.num_epochs: 5
+        training.num_workers: 4
+        training.persistent_workers: true
+        training.pin_memory: true
+        training.prefetch_factor: 2
+        training.seed: 42
+        training.top_k: 20
+        training.weight_decay: 1e-05
+    outs:
+    - path: metrics/experiments/v1_strict_filter/ggnn/training_metrics.json
+      hash: md5
+      md5: 16fff51667453968461120be0b31964f
+      size: 531
+    - path: models/experiments/v1_strict_filter/ggnn/latest
+      hash: md5
+      md5: d62df9886df0bbc9330eb1b54ceeba32.dir
+      size: 14035913
+      nfiles: 5
