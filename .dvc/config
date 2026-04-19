@@ -1,7 +1,8 @@
 [core]
     remote = dvc-production
     autostage = true
-[remote "dvc-production"]
+['remote "dvc-production"']
     url = s3://recsys-data-storage-067518243363-ap-southeast-1-an/recsys-dvc/
-[remote "dvc-local"]
+    region = ap-southeast-1
+['remote "dvc-local"']
     url = tmp/dvc-local

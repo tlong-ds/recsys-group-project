@@ -1,6 +1,6 @@
 {
-  "build_date": "2026-04-18T14:21:51+00:00",
-  "config_file": "configs\\data_config.yaml",
+  "build_date": "2026-04-19T08:05:56+00:00",
+  "config_file": "configs/data_config.yaml",
   "train": {
     "interactions": {
       "n_interactions": 618718,
