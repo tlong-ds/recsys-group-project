@@ -414,8 +414,8 @@ stages:
       size: 7074
     - path: src/recsys/utils/config.py
       hash: md5
-      md5: 9fecbba60f7fd4464ce16a0b63aab091
-      size: 4341
+      md5: ff0a4e12402501bddee9155da25ae8fe
+      size: 4373
     outs:
     - path: data/versions/v1_strict_filter/interim/clean_interactions.parquet
       hash: md5
@@ -439,7 +439,7 @@ stages:
       size: 495264
     - path: data/versions/v1_strict_filter/processed/data_stats.json
       hash: md5
-      md5: db7eb718d9b3bd4caf1c0e992c50540a
+      md5: c1c86801b369e81e79b364c53979157b
       size: 995
     - path: data/versions/v1_strict_filter/processed/item_vocab.json
       hash: md5
@@ -508,8 +508,8 @@ stages:
       size: 7074
     - path: src/recsys/utils/config.py
       hash: md5
-      md5: 9fecbba60f7fd4464ce16a0b63aab091
-      size: 4341
+      md5: ff0a4e12402501bddee9155da25ae8fe
+      size: 4373
     outs:
     - path: data/versions/v2_sliding_window/interim/clean_interactions.parquet
       hash: md5
@@ -533,7 +533,7 @@ stages:
       size: 695054
     - path: data/versions/v2_sliding_window/processed/data_stats.json
       hash: md5
-      md5: 3f9281baaf18b73d1a2800b507c7cb00
+      md5: 1f85a413359ac5495a50befdb5f24383
       size: 997
     - path: data/versions/v2_sliding_window/processed/item_vocab.json
       hash: md5
@@ -602,8 +602,8 @@ stages:
       size: 7074
     - path: src/recsys/utils/config.py
       hash: md5
-      md5: 9fecbba60f7fd4464ce16a0b63aab091
-      size: 4341
+      md5: ff0a4e12402501bddee9155da25ae8fe
+      size: 4373
     outs:
     - path: data/versions/v3_train_plus_val/interim/clean_interactions.parquet
       hash: md5
@@ -627,7 +627,7 @@ stages:
       size: 3263
     - path: data/versions/v3_train_plus_val/processed/data_stats.json
       hash: md5
-      md5: e0cec2519f62cde314ca7c79032fd06b
+      md5: 45d7adcc41b1cede9b462dee0c12a575
       size: 966
     - path: data/versions/v3_train_plus_val/processed/item_vocab.json
       hash: md5
@@ -1346,8 +1346,8 @@ stages:
       size: 209
     - path: configs/training_config.yaml
       hash: md5
-      md5: 9c0cb533ac683737acf62c412df54440
-      size: 948
+      md5: 0b8a3c11768fbe34e878b8ae5c8c2d9d
+      size: 983
     - path: data/versions/v1_strict_filter/processed/item_vocab.json
       hash: md5
       md5: 0541b8d488b341e01af36dfb4fcc6e9e
@@ -1374,8 +1374,8 @@ stages:
       size: 11103
     - path: src/recsys/models/graph_helpers.py
       hash: md5
-      md5: 80983403d2e2de6fab38642a94b52960
-      size: 43822
+      md5: ceddea9caa7e2c78cfe56256a297837b
+      size: 44405
     - path: src/recsys/models/srgnn.py
       hash: md5
       md5: 54d560c3b72b998a3c2f9f09b7ae2c9a
@@ -1402,12 +1402,12 @@ stages:
       size: 6712
     - path: src/recsys/training/trainer.py
       hash: md5
-      md5: 98b966fb432d56c5a21eb643c8fa0131
-      size: 4187
+      md5: f84b5bd4cff1b56d941ee9d2a53ab592
+      size: 4285
     - path: src/recsys/utils/config.py
       hash: md5
-      md5: 9fecbba60f7fd4464ce16a0b63aab091
-      size: 4341
+      md5: ff0a4e12402501bddee9155da25ae8fe
+      size: 4373
     params:
       configs/data_versions/v1_strict_filter.yaml:
         data.item_vocab_path: 
@@ -1432,6 +1432,7 @@ stages:
       configs/training_config.yaml:
         training.batch_size: 512
         training.device: auto
+        training.early_stopping_min_delta: 0.0001
         training.early_stopping_patience: 2
         training.lr: 0.001
         training.num_epochs: 5
@@ -1445,12 +1446,12 @@ stages:
     outs:
     - path: metrics/experiments/v1_strict_filter/srgnn/training_metrics.json
       hash: md5
-      md5: 207c1dad75b71b298e61bcabe6da8bdd
+      md5: bf7b04ffc667cafe5c44866e4f52c984
       size: 299
     - path: models/experiments/v1_strict_filter/srgnn/latest
       hash: md5
-      md5: 476326d1f056ab755d289189c1440209.dir
-      size: 14101848
+      md5: 5a1664544a8093a26c9776ca1a65c1a8.dir
+      size: 14101888
       nfiles: 5
   train_matrix@v1_strict_filter-srgnn_ngc:
     cmd: "python -m recsys.training.pipeline --stage train --dvc-mode --data-config
@@ -1474,8 +1475,8 @@ stages:
       size: 217
     - path: configs/training_config.yaml
       hash: md5
-      md5: 9c0cb533ac683737acf62c412df54440
-      size: 948
+      md5: 0b8a3c11768fbe34e878b8ae5c8c2d9d
+      size: 983
     - path: data/versions/v1_strict_filter/processed/item_vocab.json
       hash: md5
       md5: 0541b8d488b341e01af36dfb4fcc6e9e
@@ -1502,8 +1503,8 @@ stages:
       size: 11103
     - path: src/recsys/models/graph_helpers.py
       hash: md5
-      md5: 80983403d2e2de6fab38642a94b52960
-      size: 43822
+      md5: ceddea9caa7e2c78cfe56256a297837b
+      size: 44405
     - path: src/recsys/models/srgnn.py
       hash: md5
       md5: 54d560c3b72b998a3c2f9f09b7ae2c9a
@@ -1530,12 +1531,12 @@ stages:
       size: 6712
     - path: src/recsys/training/trainer.py
       hash: md5
-      md5: 98b966fb432d56c5a21eb643c8fa0131
-      size: 4187
+      md5: f84b5bd4cff1b56d941ee9d2a53ab592
+      size: 4285
     - path: src/recsys/utils/config.py
       hash: md5
-      md5: 9fecbba60f7fd4464ce16a0b63aab091
-      size: 4341
+      md5: ff0a4e12402501bddee9155da25ae8fe
+      size: 4373
     params:
       configs/data_versions/v1_strict_filter.yaml:
         data.item_vocab_path: 
@@ -1560,6 +1561,7 @@ stages:
       configs/training_config.yaml:
         training.batch_size: 512
         training.device: auto
+        training.early_stopping_min_delta: 0.0001
         training.early_stopping_patience: 2
         training.lr: 0.001
         training.num_epochs: 5
@@ -1573,12 +1575,12 @@ stages:
     outs:
     - path: metrics/experiments/v1_strict_filter/srgnn_ngc/training_metrics.json
       hash: md5
-      md5: 12fe8a2eaf0007330717dfb2134162a2
+      md5: 9e45b5ab157af453a81848b248b9ae43
       size: 303
     - path: models/experiments/v1_strict_filter/srgnn_ngc/latest
       hash: md5
-      md5: dcad3a06137ae555e33549d2b1fadf87.dir
-      size: 19131994
+      md5: 9bfffa822db865556fbc9d3147ec4393.dir
+      size: 19132034
       nfiles: 6
   train_matrix@v1_strict_filter-srgnn_fc:
     cmd: "python -m recsys.training.pipeline --stage train --dvc-mode --data-config
@@ -1602,8 +1604,8 @@ stages:
       size: 215
     - path: configs/training_config.yaml
       hash: md5
-      md5: 9c0cb533ac683737acf62c412df54440
-      size: 948
+      md5: 0b8a3c11768fbe34e878b8ae5c8c2d9d
+      size: 983
     - path: data/versions/v1_strict_filter/processed/item_vocab.json
       hash: md5
       md5: 0541b8d488b341e01af36dfb4fcc6e9e
@@ -1630,8 +1632,8 @@ stages:
       size: 11103
     - path: src/recsys/models/graph_helpers.py
       hash: md5
-      md5: 80983403d2e2de6fab38642a94b52960
-      size: 43822
+      md5: ceddea9caa7e2c78cfe56256a297837b
+      size: 44405
     - path: src/recsys/models/srgnn.py
       hash: md5
       md5: 54d560c3b72b998a3c2f9f09b7ae2c9a
@@ -1658,12 +1660,12 @@ stages:
       size: 6712
     - path: src/recsys/training/trainer.py
       hash: md5
-      md5: 98b966fb432d56c5a21eb643c8fa0131
-      size: 4187
+      md5: f84b5bd4cff1b56d941ee9d2a53ab592
+      size: 4285
     - path: src/recsys/utils/config.py
       hash: md5
-      md5: 9fecbba60f7fd4464ce16a0b63aab091
-      size: 4341
+      md5: ff0a4e12402501bddee9155da25ae8fe
+      size: 4373
     params:
       configs/data_versions/v1_strict_filter.yaml:
         data.item_vocab_path: 
@@ -1688,6 +1690,7 @@ stages:
       configs/training_config.yaml:
         training.batch_size: 512
         training.device: auto
+        training.early_stopping_min_delta: 0.0001
         training.early_stopping_patience: 2
         training.lr: 0.001
         training.num_epochs: 5
@@ -1701,12 +1704,12 @@ stages:
     outs:
     - path: metrics/experiments/v1_strict_filter/srgnn_fc/training_metrics.json
       hash: md5
-      md5: 48bc7eb842606f4e0188a2383fcf22d5
-      size: 302
+      md5: 595d374e1b93eddc138a66b84c2b7134
+      size: 301
     - path: models/experiments/v1_strict_filter/srgnn_fc/latest
       hash: md5
-      md5: ba133bb26cfac1980dbeaeec3b0b49b2.dir
-      size: 14628124
+      md5: d557dfda44fbded5296e5b9fdff49943.dir
+      size: 14628163
       nfiles: 5
   train_matrix@v1_strict_filter-srgnn_l:
     cmd: "python -m recsys.training.pipeline --stage train --dvc-mode --data-config
@@ -1730,8 +1733,8 @@ stages:
       size: 213
     - path: configs/training_config.yaml
       hash: md5
-      md5: 9c0cb533ac683737acf62c412df54440
-      size: 948
+      md5: 0b8a3c11768fbe34e878b8ae5c8c2d9d
+      size: 983
     - path: data/versions/v1_strict_filter/processed/item_vocab.json
       hash: md5
       md5: 0541b8d488b341e01af36dfb4fcc6e9e
@@ -1758,8 +1761,8 @@ stages:
       size: 11103
     - path: src/recsys/models/graph_helpers.py
       hash: md5
-      md5: 80983403d2e2de6fab38642a94b52960
-      size: 43822
+      md5: ceddea9caa7e2c78cfe56256a297837b
+      size: 44405
     - path: src/recsys/models/srgnn.py
       hash: md5
       md5: 54d560c3b72b998a3c2f9f09b7ae2c9a
@@ -1786,12 +1789,12 @@ stages:
       size: 6712
     - path: src/recsys/training/trainer.py
       hash: md5
-      md5: 98b966fb432d56c5a21eb643c8fa0131
-      size: 4187
+      md5: f84b5bd4cff1b56d941ee9d2a53ab592
+      size: 4285
     - path: src/recsys/utils/config.py
       hash: md5
-      md5: 9fecbba60f7fd4464ce16a0b63aab091
-      size: 4341
+      md5: ff0a4e12402501bddee9155da25ae8fe
+      size: 4373
     params:
       configs/data_versions/v1_strict_filter.yaml:
         data.item_vocab_path: 
@@ -1816,6 +1819,7 @@ stages:
       configs/training_config.yaml:
         training.batch_size: 512
         training.device: auto
+        training.early_stopping_min_delta: 0.0001
         training.early_stopping_patience: 2
         training.lr: 0.001
         training.num_epochs: 5
@@ -1829,12 +1833,12 @@ stages:
     outs:
     - path: metrics/experiments/v1_strict_filter/srgnn_l/training_metrics.json
       hash: md5
-      md5: a81d20ed8b69a1beb4ebe7904fd59b62
+      md5: 9df7a78362c6c0aceec24aedec926c16
       size: 301
     - path: models/experiments/v1_strict_filter/srgnn_l/latest
       hash: md5
-      md5: aa61e38c4b9930f3c0312fbb071fdf4f.dir
-      size: 14101864
+      md5: 43ac4bd9e1ed460bf17cf3aa5dfcd72b.dir
+      size: 14101904
       nfiles: 5
   train_matrix@v1_strict_filter-srgnn_avg:
     cmd: "python -m recsys.training.pipeline --stage train --dvc-mode --data-config
@@ -1858,8 +1862,8 @@ stages:
       size: 217
     - path: configs/training_config.yaml
       hash: md5
-      md5: 9c0cb533ac683737acf62c412df54440
-      size: 948
+      md5: 0b8a3c11768fbe34e878b8ae5c8c2d9d
+      size: 983
     - path: data/versions/v1_strict_filter/processed/item_vocab.json
       hash: md5
       md5: 0541b8d488b341e01af36dfb4fcc6e9e
@@ -1886,8 +1890,8 @@ stages:
       size: 11103
     - path: src/recsys/models/graph_helpers.py
       hash: md5
-      md5: 80983403d2e2de6fab38642a94b52960
-      size: 43822
+      md5: ceddea9caa7e2c78cfe56256a297837b
+      size: 44405
     - path: src/recsys/models/srgnn.py
       hash: md5
       md5: 54d560c3b72b998a3c2f9f09b7ae2c9a
@@ -1914,12 +1918,12 @@ stages:
       size: 6712
     - path: src/recsys/training/trainer.py
       hash: md5
-      md5: 98b966fb432d56c5a21eb643c8fa0131
-      size: 4187
+      md5: f84b5bd4cff1b56d941ee9d2a53ab592
+      size: 4285
     - path: src/recsys/utils/config.py
       hash: md5
-      md5: 9fecbba60f7fd4464ce16a0b63aab091
-      size: 4341
+      md5: ff0a4e12402501bddee9155da25ae8fe
+      size: 4373
     params:
       configs/data_versions/v1_strict_filter.yaml:
         data.item_vocab_path: 
@@ -1944,6 +1948,7 @@ stages:
       configs/training_config.yaml:
         training.batch_size: 512
         training.device: auto
+        training.early_stopping_min_delta: 0.0001
         training.early_stopping_patience: 2
         training.lr: 0.001
         training.num_epochs: 5
@@ -1957,12 +1962,12 @@ stages:
     outs:
     - path: metrics/experiments/v1_strict_filter/srgnn_avg/training_metrics.json
       hash: md5
-      md5: 43e28153efa9d56c5cb745dc3cdc1bac
+      md5: 215158031fd6f0a8191c8aa4f93d411d
       size: 303
     - path: models/experiments/v1_strict_filter/srgnn_avg/latest
       hash: md5
-      md5: 42f885169fc8d84a1cb4addc51e1c833.dir
-      size: 14101880
+      md5: 87aff3836e6a7601f188b9c042fdfb04.dir
+      size: 14101920
       nfiles: 5
   train_matrix@v1_strict_filter-srgnn_att:
     cmd: "python -m recsys.training.pipeline --stage train --dvc-mode --data-config
@@ -1986,8 +1991,8 @@ stages:
       size: 217
     - path: configs/training_config.yaml
       hash: md5
-      md5: 9c0cb533ac683737acf62c412df54440
-      size: 948
+      md5: 0b8a3c11768fbe34e878b8ae5c8c2d9d
+      size: 983
     - path: data/versions/v1_strict_filter/processed/item_vocab.json
       hash: md5
       md5: 0541b8d488b341e01af36dfb4fcc6e9e
@@ -2014,8 +2019,8 @@ stages:
       size: 11103
     - path: src/recsys/models/graph_helpers.py
       hash: md5
-      md5: 80983403d2e2de6fab38642a94b52960
-      size: 43822
+      md5: ceddea9caa7e2c78cfe56256a297837b
+      size: 44405
     - path: src/recsys/models/srgnn.py
       hash: md5
       md5: 54d560c3b72b998a3c2f9f09b7ae2c9a
@@ -2042,12 +2047,12 @@ stages:
       size: 6712
     - path: src/recsys/training/trainer.py
       hash: md5
-      md5: 98b966fb432d56c5a21eb643c8fa0131
-      size: 4187
+      md5: f84b5bd4cff1b56d941ee9d2a53ab592
+      size: 4285
     - path: src/recsys/utils/config.py
       hash: md5
-      md5: 9fecbba60f7fd4464ce16a0b63aab091
-      size: 4341
+      md5: ff0a4e12402501bddee9155da25ae8fe
+      size: 4373
     params:
       configs/data_versions/v1_strict_filter.yaml:
         data.item_vocab_path: 
@@ -2072,6 +2077,7 @@ stages:
       configs/training_config.yaml:
         training.batch_size: 512
         training.device: auto
+        training.early_stopping_min_delta: 0.0001
         training.early_stopping_patience: 2
         training.lr: 0.001
         training.num_epochs: 5
@@ -2085,10 +2091,10 @@ stages:
     outs:
     - path: metrics/experiments/v1_strict_filter/srgnn_att/training_metrics.json
       hash: md5
-      md5: a56c7769ac35d3539fb9c7295119a92b
+      md5: 8fdf24a29960effe69e13b7a9bc533ec
       size: 303
     - path: models/experiments/v1_strict_filter/srgnn_att/latest
       hash: md5
-      md5: 41cc2726dcbcdedaa0e9dbb64fc76645.dir
-      size: 14101880
+      md5: 4004fa8fa23a187138205b6823840e1b.dir
+      size: 14101920
       nfiles: 5
