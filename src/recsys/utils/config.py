@@ -118,6 +118,7 @@ def load_training_runtime_config(
     model_config_path: str | Path,
     training_config_path: str | Path,
     params_path: str | Path = "params.yaml",
+    data_params_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """Load merged runtime config from base config files plus params overlay."""
     base = merge_configs(
@@ -126,4 +127,13 @@ def load_training_runtime_config(
         load_config(training_config_path),
     )
     params_overlay = params_to_config_overlay(load_optional_config(params_path))
-    return merge_configs(base, params_overlay)
+    merged = merge_configs(base, params_overlay)
+
+    if data_params_path is not None:
+        data_overlay = params_to_config_overlay(load_config(data_params_path)).get(
+            "data", {}
+        )
+        if isinstance(data_overlay, dict) and data_overlay:
+            merged = merge_configs(merged, {"data": data_overlay})
+
+    return merged

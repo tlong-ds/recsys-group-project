@@ -97,3 +97,55 @@ class TestConfigOverlay(unittest.TestCase):
             self.assertEqual(merged["training"]["top_k"], 50)
             self.assertFalse(merged["mlflow"]["enabled"])
             self.assertEqual(merged["registry"]["root_path"], "models/trained")
+
+    def test_training_runtime_config_applies_data_overlay_from_separate_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            data_cfg_path = root / "data.yaml"
+            model_cfg_path = root / "model.yaml"
+            training_cfg_path = root / "training.yaml"
+            params_path = root / "params.yaml"
+            data_params_path = root / "v1.yaml"
+
+            _write_yaml(
+                data_cfg_path,
+                {
+                    "data": {
+                        "processed_path": "data/processed",
+                        "train_examples_path": "data/processed/train_examples.parquet",
+                    }
+                },
+            )
+            _write_yaml(model_cfg_path, {"model": {"hidden_size": 128}})
+            _write_yaml(training_cfg_path, {"training": {"top_k": 20}})
+            _write_yaml(
+                params_path,
+                {
+                    "training": {"top_k": 50},
+                    "data": {"processed_path": "data/processed_from_params"},
+                },
+            )
+            _write_yaml(
+                data_params_path,
+                {
+                    "data": {
+                        "processed_path": "data/versions/v1/processed",
+                        "train_examples_path": "data/versions/v1/processed/train_examples.parquet",
+                    }
+                },
+            )
+
+            merged = load_training_runtime_config(
+                data_config_path=data_cfg_path,
+                model_config_path=model_cfg_path,
+                training_config_path=training_cfg_path,
+                params_path=params_path,
+                data_params_path=data_params_path,
+            )
+
+            self.assertEqual(merged["training"]["top_k"], 50)
+            self.assertEqual(merged["data"]["processed_path"], "data/versions/v1/processed")
+            self.assertEqual(
+                merged["data"]["train_examples_path"],
+                "data/versions/v1/processed/train_examples.parquet",
+            )

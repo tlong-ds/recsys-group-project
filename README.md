@@ -34,7 +34,12 @@ python -m unittest discover -s tests -p "test_*.py"
 recsys-process-data --stage all --config configs/data_config.yaml --params params.yaml
 recsys-train --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params params.yaml
 recsys-serve --config configs/serving_config.yaml
-dvc repro train evaluate
+# Closed-loop: build data versions + train/eval + compare in one target
+dvc repro compare_data_versions
+# Data-only builds (no training)
+dvc repro data_version_v1
+dvc repro data_version_v2
+dvc repro data_version_v3
 # Full matrix: 3 data versions × 8 model profiles (24 train + 24 evaluate stages)
 dvc repro train_matrix evaluate_matrix
 ```
@@ -42,13 +47,22 @@ dvc repro train_matrix evaluate_matrix
 ## Versioned data pipelines (V1/V2/V3)
 
 Each data version has its own params file and artifact directory so it can be
-tracked independently in DVC.
+tracked independently in DVC. The repo also provides a closed-loop comparison
+target that runs data build + train/eval + aggregation in one pipeline.
 
 ```bash
-# Build data versions independently
+# Run the full version comparison pipeline
+dvc repro compare_data_versions
+
+# Build data versions independently (no training)
 dvc repro data_version_v1
 dvc repro data_version_v2
 dvc repro data_version_v3
+
+# Or run one version branch explicitly
+dvc repro eval_v1
+dvc repro eval_v2
+dvc repro eval_v3
 ```
 
 Version definitions:
@@ -57,17 +71,27 @@ Version definitions:
 - V2 sliding-window safety: `configs/data_versions/v2_sliding_window.yaml`
 - V3 train+val merge: `configs/data_versions/v3_train_plus_val.yaml`
 
-Generated artifacts:
+Generated data artifacts:
 
 - `data/versions/v1_strict_filter/*`
 - `data/versions/v2_sliding_window/*`
 - `data/versions/v3_train_plus_val/*`
 
-Train/evaluate with a specific data version:
+Generated model and metrics namespaces:
+
+- `models/trained/v1_strict_filter/latest`
+- `models/trained/v2_sliding_window/latest`
+- `models/trained/v3_train_plus_val/latest`
+- `metrics/v1_strict_filter/*.json`
+- `metrics/v2_sliding_window/*.json`
+- `metrics/v3_train_plus_val/*.json`
+- `metrics/data_version_comparison.json`
+
+Ad hoc train/evaluate with a specific data version:
 
 ```bash
-python -m recsys.training.pipeline --stage train --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params configs/data_versions/v1_strict_filter.yaml
-python -m recsys.training.pipeline --stage evaluate --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params configs/data_versions/v1_strict_filter.yaml
+python -m recsys.training.pipeline --stage train --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params params.yaml --data-params configs/data_versions/v1_strict_filter.yaml --registry-root models/trained/v1_strict_filter --train-metrics-path metrics/v1_strict_filter/training_metrics.json
+python -m recsys.training.pipeline --stage evaluate --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params params.yaml --data-params configs/data_versions/v1_strict_filter.yaml --registry-root models/trained/v1_strict_filter --evaluation-metrics-path metrics/v1_strict_filter/evaluation_metrics.json
 ```
 
 ## Model matrix training with DVC

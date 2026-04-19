@@ -161,10 +161,12 @@ def run_train_stage(config: dict[str, Any]) -> dict[str, Any]:
         metrics_path = _metrics_path(
             training_config, "train_metrics_path", "metrics/training_metrics.json"
         )
+        lineage = _lineage_metadata(config)
         payload: dict[str, Any] = {
             "artifact_path":      str(training_result.artifact_path),
             "validation_metrics": training_result.metrics,
             "mlflow_run_id":      active_run.info.run_id if active_run is not None else None,
+            **lineage,
         }
         if registry_info is not None:
             payload["model_registry"] = registry_info
@@ -174,6 +176,7 @@ def run_train_stage(config: dict[str, Any]) -> dict[str, Any]:
         "artifact_path":      str(training_result.artifact_path),
         "validation_metrics": training_result.metrics,
         "training_metrics":   str(metrics_path),
+        **lineage,
     }
     if registry_info is not None:
         outputs["model_registry"] = registry_info
@@ -205,12 +208,17 @@ def run_evaluate_stage(config: dict[str, Any]) -> dict[str, Any]:
     metrics_path = _metrics_path(
         training_cfg, "evaluation_metrics_path", "metrics/evaluation_metrics.json"
     )
-    _write_json({"model_path": str(model_path), "test_metrics": test_metrics}, metrics_path)
+    lineage = _lineage_metadata(config)
+    _write_json(
+        {"model_path": str(model_path), "test_metrics": test_metrics, **lineage},
+        metrics_path,
+    )
 
     return {
         "model_path":         str(model_path),
         "test_metrics":       test_metrics,
         "evaluation_metrics": str(metrics_path),
+        **lineage,
     }
 
 
@@ -247,7 +255,27 @@ def main() -> None:
     parser.add_argument("--model-config",    default="configs/model_config.yaml")
     parser.add_argument("--training-config", default="configs/training_config.yaml")
     parser.add_argument("--params",          default="params.yaml")
+    parser.add_argument(
+        "--data-params",
+        default=None,
+        help="Optional data-only overlay for versioned train/eval inputs.",
+    )
     parser.add_argument("--stage",           default=STAGE_ALL, choices=STAGE_NAMES)
+    parser.add_argument(
+        "--registry-root",
+        default=None,
+        help="Override the model registry root for this run.",
+    )
+    parser.add_argument(
+        "--train-metrics-path",
+        default=None,
+        help="Override the training metrics output path for this run.",
+    )
+    parser.add_argument(
+        "--evaluation-metrics-path",
+        default=None,
+        help="Override the evaluation metrics output path for this run.",
+    )
     parser.add_argument(
         "--dvc-mode",
         action="store_true",
@@ -275,7 +303,10 @@ def main() -> None:
         model_config_path    = args.model_config,
         training_config_path = args.training_config,
         params_path          = args.params,
+        data_params_path     = args.data_params,
     )
+    _apply_runtime_overrides(config, args)
+    _attach_lineage_metadata(config, args)
     if args.dvc_mode:
         config.setdefault("training", {})["dvc_mode"] = True
     if args.registry_root:
@@ -380,6 +411,87 @@ def _flatten_dict(data: dict[str, Any], prefix: str = "") -> dict[str, str]:
 
 def _metrics_path(training_cfg: dict[str, Any], key: str, default: str) -> Path:
     return Path(str(training_cfg.get(key, default)))
+
+
+def _apply_runtime_overrides(config: dict[str, Any], args: argparse.Namespace) -> None:
+    if args.registry_root:
+        config.setdefault("registry", {})["root_path"] = args.registry_root
+    if args.train_metrics_path:
+        config.setdefault("training", {})["train_metrics_path"] = args.train_metrics_path
+    if args.evaluation_metrics_path:
+        config.setdefault("training", {})[
+            "evaluation_metrics_path"
+        ] = args.evaluation_metrics_path
+
+
+def _attach_lineage_metadata(config: dict[str, Any], args: argparse.Namespace) -> None:
+    lineage = config.setdefault("lineage", {})
+    data_params_path = args.data_params
+    lineage["data_params_path"] = str(data_params_path) if data_params_path else None
+    lineage["data_version"] = _infer_data_version(config, args.data_params)
+
+
+def _lineage_metadata(config: dict[str, Any]) -> dict[str, Any]:
+    lineage_cfg = config.get("lineage", {})
+    if not isinstance(lineage_cfg, dict):
+        lineage_cfg = {}
+
+    data_params_path = _string_or_none(lineage_cfg.get("data_params_path"))
+    return {
+        "data_version": _infer_data_version(config, data_params_path),
+        "data_params_path": data_params_path,
+    }
+
+
+def _infer_data_version(
+    config: dict[str, Any],
+    data_params_path: str | Path | None = None,
+) -> str:
+    lineage_cfg = config.get("lineage", {})
+    if isinstance(lineage_cfg, dict):
+        explicit = _string_or_none(lineage_cfg.get("data_version"))
+        if explicit:
+            return explicit
+
+    candidates: list[str | Path | None] = [data_params_path]
+    data_cfg = config.get("data", {})
+    if isinstance(data_cfg, dict):
+        candidates.extend(
+            [
+                data_cfg.get("processed_path"),
+                data_cfg.get("train_examples_path"),
+                data_cfg.get("test_examples_path"),
+            ]
+        )
+
+    for candidate in candidates:
+        slug = _extract_version_slug(candidate)
+        if slug:
+            return slug
+    return "default"
+
+
+def _extract_version_slug(candidate: str | Path | None) -> str | None:
+    if not candidate:
+        return None
+    path = Path(str(candidate))
+    parts = list(path.parts)
+
+    if "data_versions" in parts:
+        return path.stem
+
+    if "versions" in parts:
+        idx = parts.index("versions")
+        if idx + 1 < len(parts):
+            return parts[idx + 1]
+
+    return None
+
+
+def _string_or_none(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
+    return str(value)
 
 
 def _write_json(payload: dict[str, Any], destination: Path) -> Path:

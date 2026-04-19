@@ -212,6 +212,7 @@ Minimum reproducibility metadata:
 
 Operational rule:
 - The training pipeline must consume train/val/test, item_vocab.json, and data_stats.json from the same build run
+- Versioned DVC branches (`train_v*` / `eval_v*`) must bind model registry and metrics outputs to the same data-version namespace
 
 ## 10. Retention and Rollback
 
