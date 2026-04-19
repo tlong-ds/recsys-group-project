@@ -77,9 +77,13 @@ class Trainer:
             raise ValueError("Training examples are empty.")
 
         training_cfg = self.config.get("training", {})
+        model_cfg = self.config.get("model", {})
+        configured_batch_size = training_cfg.get("batch_size", 256)
+        if isinstance(model_cfg, dict) and "train_batch_size" in model_cfg:
+            configured_batch_size = model_cfg["train_batch_size"]
         fit_kwargs: dict[str, Any] = {
             "num_epochs":               int(training_cfg.get("num_epochs",              10)),
-            "batch_size":               int(training_cfg.get("batch_size",             256)),
+            "batch_size":               int(configured_batch_size),
             "lr":                     float(training_cfg.get("lr",                    1e-3)),
             "weight_decay":           float(training_cfg.get("weight_decay",          1e-5)),
             "early_stopping_patience":  int(training_cfg.get("early_stopping_patience",  5)),
