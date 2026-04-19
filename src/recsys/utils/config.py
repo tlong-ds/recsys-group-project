@@ -71,6 +71,7 @@ _TRAINING_PARAM_KEYS = (
     "lr",
     "weight_decay",
     "early_stopping_patience",
+    "early_stopping_min_delta",
     "top_k",
     "device",
 )

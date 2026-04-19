@@ -10,6 +10,7 @@ training:
   lr: 1.0e-3
   weight_decay: 1.0e-5
   early_stopping_patience: 2
+  early_stopping_min_delta: 1.0e-4
   top_k: 20
   train_metrics_path: metrics/training_metrics.json
   evaluation_metrics_path: metrics/evaluation_metrics.json

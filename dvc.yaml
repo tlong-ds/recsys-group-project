@@ -460,6 +460,7 @@ stages:
           - training.lr
           - training.weight_decay
           - training.early_stopping_patience
+          - training.early_stopping_min_delta
           - training.top_k
           - training.num_workers
           - training.pin_memory

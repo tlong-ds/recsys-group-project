@@ -616,6 +616,7 @@ class GraphRecommenderBase:
         weight_decay: float = 1e-5,
         val_df: pd.DataFrame | None = None,
         early_stopping_patience: int = 3,
+        early_stopping_min_delta: float = 0.0,
         item_vocab: Mapping[str, Any] | None = None,
         num_workers: int = 0,
         pin_memory: bool | str | None = None,
@@ -695,8 +696,10 @@ class GraphRecommenderBase:
         criterion = nn.CrossEntropyLoss()
 
         best_state: dict[str, torch.Tensor] | None = None
-        best_val_loss    = float("inf")
+        best_monitor_loss = float("inf")
         patience_counter = 0
+        min_delta = max(float(early_stopping_min_delta), 0.0)
+        monitor_name = "val_loss" if val_loader is not None else "train_loss"
 
         for epoch in range(1, num_epochs + 1):
             train_loss = self._run_epoch(train_loader, optimizer, criterion)
@@ -708,18 +711,31 @@ class GraphRecommenderBase:
             if val_loader is not None:
                 val_loss = self._eval_epoch(val_loader, criterion)
                 log_msg += f" val_loss={val_loss:.4f}"
-                if val_loss < best_val_loss:
-                    best_val_loss    = val_loss
-                    patience_counter = 0
-                    best_state = {
-                        k: v.detach().cpu().clone()
-                        for k, v in self._core.state_dict().items()
-                    }
-                else:
-                    patience_counter += 1
-                    if patience_counter >= early_stopping_patience:
-                        logger.info("%s early_stop=true", log_msg)
-                        break
+                monitor_loss = val_loss
+            else:
+                monitor_loss = train_loss
+
+            if monitor_loss < (best_monitor_loss - min_delta):
+                best_monitor_loss = monitor_loss
+                patience_counter = 0
+                best_state = {
+                    k: v.detach().cpu().clone()
+                    for k, v in self._core.state_dict().items()
+                }
+            else:
+                patience_counter += 1
+                if (
+                    early_stopping_patience > 0
+                    and patience_counter >= early_stopping_patience
+                ):
+                    logger.info(
+                        "%s early_stop=true monitor=%s best=%.6f min_delta=%.6f",
+                        log_msg,
+                        monitor_name,
+                        best_monitor_loss,
+                        min_delta,
+                    )
+                    break
 
             logger.info(log_msg)
 

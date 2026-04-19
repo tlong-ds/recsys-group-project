@@ -83,6 +83,7 @@ class Trainer:
             "lr":                     float(training_cfg.get("lr",                    1e-3)),
             "weight_decay":           float(training_cfg.get("weight_decay",          1e-5)),
             "early_stopping_patience":  int(training_cfg.get("early_stopping_patience",  5)),
+            "early_stopping_min_delta": float(training_cfg.get("early_stopping_min_delta", 0.0)),
             "val_df":                   val_df if not val_df.empty else None,
             "item_vocab":               item_vocab,
             "num_workers":              int(training_cfg.get("num_workers",              0)),
