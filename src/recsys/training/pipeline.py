@@ -160,6 +160,7 @@ def run_train_stage(config: dict[str, Any]) -> dict[str, Any]:
                     name="model_core",
                     serialization_format="pt2",
                     input_example=input_example,
+                    signature=_mlflow_pt2_signature(input_example),
                 )
                 registry_info = register_model_version(
                     config=config,
@@ -424,6 +425,41 @@ def _mlflow_pt2_input_example(
     row = train_df.iloc[0]
     tensors = model._tensors_from_graph(row.x, row.edge_index, row.alias_inputs)
     return tuple(tensors)
+
+
+def _mlflow_pt2_signature(input_example: tuple[torch.Tensor, ...]):
+    from mlflow.models.signature import ModelSignature
+    from mlflow.types.schema import Schema, TensorSpec
+
+    return ModelSignature(
+        inputs=Schema(
+            [
+                TensorSpec(
+                    type=_tensor_numpy_dtype(tensor),
+                    shape=tuple(tensor.shape),
+                    name=f"input_{index}",
+                )
+                for index, tensor in enumerate(input_example)
+            ]
+        )
+    )
+
+
+def _tensor_numpy_dtype(tensor: torch.Tensor) -> np.dtype:
+    dtype_map: dict[torch.dtype, np.dtype] = {
+        torch.float16: np.dtype(np.float16),
+        torch.float32: np.dtype(np.float32),
+        torch.float64: np.dtype(np.float64),
+        torch.int8: np.dtype(np.int8),
+        torch.int16: np.dtype(np.int16),
+        torch.int32: np.dtype(np.int32),
+        torch.int64: np.dtype(np.int64),
+        torch.uint8: np.dtype(np.uint8),
+        torch.bool: np.dtype(np.bool_),
+    }
+    if tensor.dtype not in dtype_map:
+        raise ValueError(f"Unsupported tensor dtype for MLflow signature: {tensor.dtype}")
+    return dtype_map[tensor.dtype]
 
 
 def _apply_runtime_overrides(config: dict[str, Any], args: argparse.Namespace) -> None:
