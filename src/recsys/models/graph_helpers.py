@@ -731,12 +731,11 @@ class GraphRecommenderBase:
         self._core.train()
         total_loss, total_n = 0.0, 0
 
-        for batch in loader:
-            batch  = _move_batch(
-                batch,
-                self.device,
-                non_blocking=self._non_blocking_transfer,
-            )
+        for batch in _prefetch_batches(
+            loader,
+            self.device,
+            non_blocking=self._non_blocking_transfer,
+        ):
             scores = self._forward_batch(batch)
             loss   = criterion(scores, batch["targets"])
             optimizer.zero_grad()
@@ -755,12 +754,11 @@ class GraphRecommenderBase:
         self._core.eval()
         total_loss, total_n = 0.0, 0
 
-        for batch in loader:
-            batch  = _move_batch(
-                batch,
-                self.device,
-                non_blocking=self._non_blocking_transfer,
-            )
+        for batch in _prefetch_batches(
+            loader,
+            self.device,
+            non_blocking=self._non_blocking_transfer,
+        ):
             scores = self._forward_batch(batch)
             loss   = criterion(scores, batch["targets"])
             n = int(batch["targets"].size(0))
@@ -1039,6 +1037,49 @@ def _move_batch(
     non_blocking: bool = False,
 ) -> dict[str, torch.Tensor]:
     return {k: v.to(device, non_blocking=non_blocking) for k, v in batch.items()}
+
+
+def _prefetch_batches(
+    loader: Any,
+    device: torch.device,
+    non_blocking: bool = False,
+):
+    if device.type != "cuda":
+        for batch in loader:
+            yield _move_batch(batch, device, non_blocking=non_blocking)
+        return
+
+    stream = torch.cuda.Stream(device=device)
+    loader_iter = iter(loader)
+    next_batch: dict[str, torch.Tensor] | None = None
+
+    def _enqueue_next() -> None:
+        nonlocal next_batch
+        try:
+            cpu_batch = next(loader_iter)
+        except StopIteration:
+            next_batch = None
+            return
+        with torch.cuda.stream(stream):
+            next_batch = _move_batch(cpu_batch, device, non_blocking=non_blocking)
+
+    _enqueue_next()
+    while next_batch is not None:
+        current_stream = torch.cuda.current_stream(device=device)
+        current_stream.wait_stream(stream)
+        batch = next_batch
+        _record_batch_stream(batch, current_stream)
+        _enqueue_next()
+        yield batch
+
+
+def _record_batch_stream(
+    batch: dict[str, torch.Tensor],
+    stream: torch.cuda.Stream,
+) -> None:
+    for value in batch.values():
+        if isinstance(value, torch.Tensor) and value.is_cuda:
+            value.record_stream(stream)
 
 
 def _resolve_optional_bool(value: bool | str | None, *, key: str) -> bool | None:
