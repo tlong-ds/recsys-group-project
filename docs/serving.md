@@ -34,13 +34,19 @@ Key settings:
 - `security.docs_enabled`: Expose or disable FastAPI docs/OpenAPI routes.
 
 ## Endpoints
-- `GET /health`: Public health endpoint with sanitized model status.
+- `GET /health`: Public liveness endpoint with sanitized model status.
+- `GET /ready`: Public readiness endpoint that returns `503` when the model is unavailable.
 - `POST /recommend`: Authenticated recommendation endpoint.
 - `GET /metrics`: Authenticated Prometheus metrics endpoint.
 
 When model registry loading is enabled, `/health` exposes only non-sensitive
 source metadata. It does not return local artifact paths, run IDs, or raw
 exceptions.
+
+`/recommend` also records online monitoring signals for Prometheus, including
+request outcome, prediction latency, input sequence length, requested `top_k`,
+and OOV item counts against the loaded model catalog. These online signals are
+separate from the offline benchmark replay drift reports in `recsys.monitoring`.
 
 ## Running Locally
 To run the server locally, you can use the provided CLI entrypoint or Docker Compose:

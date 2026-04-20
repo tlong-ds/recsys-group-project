@@ -15,6 +15,15 @@ class _FakePredictor:
     ) -> list[int]:
         return list(range(1, top_k + 1))
 
+    def input_quality(self, item_sequence: list[int]) -> dict[str, int | float]:
+        return {
+            "sequence_length": len(item_sequence),
+            "known_items": len(item_sequence),
+            "unknown_items": 0,
+            "oov_ratio": 0.0,
+            "known_catalog_items": 100,
+        }
+
 
 def _serving_config() -> dict[str, object]:
     return {

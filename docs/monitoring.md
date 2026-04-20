@@ -8,9 +8,42 @@ The monitoring stack relies on **Prometheus** for metrics collection and **Grafa
 ## Metrics Collection (Prometheus)
 - **Library**: `prometheus-fastapi-instrumentator` is used in `src/recsys/serving/api.py` to automatically instrument FastAPI endpoints, collecting default metrics such as request latency, HTTP status codes, and request count.
 - **Custom Metrics**: A custom Prometheus counter, `recsys_recommendations_total`, tracks the total number of successful recommendation requests served.
+- **Online Input Quality Metrics**: `/recommend` records request outcomes,
+  model prediction latency, `item_sequence` length, requested `top_k`, and
+  unknown/OOV item ratio against the currently loaded model catalog.
 - **Configuration**: `deployment/monitoring/prometheus.yml` configures Prometheus to scrape metrics from the `api` service on port `8000` every 15 seconds.
 - **Authentication**: `/metrics` requires the same bearer API key as other protected API routes. Docker Compose mounts `deployment/secrets/recsys-api-key` into Prometheus as a bearer token file.
 - **Alerts**: Alerting rules are defined in `deployment/monitoring/alerts.yml` to trigger notifications when metrics cross specific thresholds.
+
+### Online Serving Signals
+The online layer is intentionally lightweight and does not run Evidently,
+Pandas, or parquet-based drift reports in the API request path.
+
+Key Prometheus metrics:
+- `recsys_recommendation_requests_total{status}`: request outcomes.
+- `recsys_prediction_latency_seconds`: model inference latency histogram.
+- `recsys_input_sequence_length`: input session length histogram.
+- `recsys_requested_top_k`: requested recommendation count histogram.
+- `recsys_input_items_total`: total request items received.
+- `recsys_oov_items_total`: items unknown to the loaded model catalog.
+- `recsys_model_ready`: readiness gauge for the configured model.
+
+Useful Prometheus queries:
+```promql
+# Online OOV ratio
+rate(recsys_oov_items_total[5m])
+/
+clamp_min(rate(recsys_input_items_total[5m]), 1e-9)
+
+# Recommendation p95 latency
+histogram_quantile(
+  0.95,
+  sum(rate(recsys_prediction_latency_seconds_bucket[5m])) by (le)
+)
+
+# Non-success recommendation request rate
+sum(rate(recsys_recommendation_requests_total{status!="success"}[5m]))
+```
 
 ## Visualization (Grafana)
 Grafana is used to build dashboards visualizing the metrics collected by Prometheus.
