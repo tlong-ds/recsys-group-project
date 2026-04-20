@@ -67,3 +67,30 @@ def test_write_comparison_report_persists_json(tmp_path: Path) -> None:
 
     assert written_path == output_path
     assert json.loads(output_path.read_text(encoding="utf-8")) == payload
+
+
+def test_build_comparison_report_includes_drift_summary(tmp_path: Path) -> None:
+    train_metrics = tmp_path / "train.json"
+    eval_metrics = tmp_path / "eval.json"
+    drift_metrics = tmp_path / "drift.json"
+    train_metrics.write_text(json.dumps({"data_version": "v1"}), encoding="utf-8")
+    eval_metrics.write_text(json.dumps({"data_version": "v1"}), encoding="utf-8")
+    drift_metrics.write_text(
+        json.dumps({"status": "warning", "summary": {"warning_checks": 1}}),
+        encoding="utf-8",
+    )
+
+    payload = build_comparison_report(
+        [("v1", train_metrics, eval_metrics)],
+        [("baseline", drift_metrics)],
+    )
+
+    assert payload["drift_monitoring"]["status"] == "warning"
+    assert payload["drift_monitoring"]["scenarios"] == [
+        {
+            "name": "baseline",
+            "status": "warning",
+            "summary": {"warning_checks": 1},
+            "report_path": str(drift_metrics),
+        }
+    ]

@@ -109,11 +109,27 @@ dvc repro drift_v1_vs_v2
 dvc repro drift_synthetic_oov
 ```
 
+They are also integrated into the closed-loop `compare_data_versions` target, so
+`dvc repro compare_data_versions` now generates both the version comparison and
+drift summaries in one run.
+
 ## Running the Monitoring Stack
 The monitoring stack can be launched independently or as part of the full stack via Docker Compose:
 ```bash
 export RECSYS_API_KEYS=<api-key>
 export GRAFANA_ADMIN_PASSWORD=<strong-password>
 printf '%s' "$RECSYS_API_KEYS" > deployment/secrets/recsys-api-key
-docker-compose up -d prometheus grafana
+docker compose --profile observability up -d prometheus grafana
 ```
+
+## Monitoring on EKS
+
+EKS manifests for Prometheus and Grafana are included under `deployment/kubernetes/`
+and are applied via:
+
+```bash
+kubectl apply -k deployment/kubernetes/
+```
+
+Prometheus scrapes `recsys-api.recsys.svc.cluster.local:80` and authenticates to
+`/metrics` using the `recsys-monitoring-secrets` secret key `recsys-api-key`.

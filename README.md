@@ -48,7 +48,8 @@ dvc repro train_matrix evaluate_matrix
 
 Each data version has its own params file and artifact directory so it can be
 tracked independently in DVC. The repo also provides a closed-loop comparison
-target that runs data build + train/eval + aggregation in one pipeline.
+target that runs data build + train/eval + drift monitoring + aggregation in one
+pipeline.
 
 ```bash
 # Run the full version comparison pipeline
@@ -85,6 +86,7 @@ Generated model and metrics namespaces:
 - `metrics/v1_strict_filter/*.json`
 - `metrics/v2_sliding_window/*.json`
 - `metrics/v3_train_plus_val/*.json`
+- `metrics/monitoring/drift_*.json`
 - `metrics/data_version_comparison.json`
 
 Ad hoc train/evaluate with a specific data version:

@@ -48,6 +48,10 @@ request outcome, prediction latency, input sequence length, requested `top_k`,
 and OOV item counts against the loaded model catalog. These online signals are
 separate from the offline benchmark replay drift reports in `recsys.monitoring`.
 
+For CT-driven deployments, keep `model_registry.model_alias` set to an alias
+managed by your CT workflow (for example `Production`) so serving follows model
+promotions without changing image tags.
+
 ## Running Locally
 To run the server locally, you can use the provided CLI entrypoint or Docker Compose:
 ```bash
@@ -59,7 +63,7 @@ python -m recsys.serving.api --config configs/serving_config.yaml
 export RECSYS_API_KEYS=local-dev-key
 export GRAFANA_ADMIN_PASSWORD=<strong-password>
 printf '%s' "$RECSYS_API_KEYS" > deployment/secrets/recsys-api-key
-docker-compose up api
+docker compose up api
 ```
 
 Send protected requests with:

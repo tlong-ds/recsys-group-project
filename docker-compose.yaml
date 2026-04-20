@@ -1,67 +1,114 @@
+name: recsys-local
+
 services:
   api:
     build: .
     command: ["recsys-serve", "--config", "configs/serving_config.yaml"]
+    env_file:
+      - .env
+    environment:
+      RECSYS_SERVING_CONFIG: /app/configs/serving_config.yaml
+      RECSYS_MODEL_PATH: /app/models/trained/latest/
+      RECSYS_API_KEYS: ${RECSYS_API_KEYS:?Set RECSYS_API_KEYS in .env}
+      DAGSHUB_USER_TOKEN: ${DAGSHUB_USER_TOKEN:-}
     ports:
       - "8000:8000"
-    environment:
-      RECSYS_MODEL_PATH: /app/models/trained/latest/model.json
-      RECSYS_API_KEYS: ${RECSYS_API_KEYS:?Set RECSYS_API_KEYS before starting compose}
     volumes:
-      - ./configs:/app/configs
-      - ./models:/app/models
-    depends_on:
-      - mlflow
+      - ./configs:/app/configs:ro
+      - ./models:/app/models:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    networks: [recsys]
 
-  streamlit:
-    build: .
-    command:
-      [
-        "streamlit",
-        "run",
-        "streamlit_app/app.py",
-        "--server.address=0.0.0.0",
-        "--server.port=8501"
-      ]
-    ports:
-      - "8501:8501"
-    volumes:
-      - .:/app
-    depends_on:
-      - api
+  # frontend:
+  #   image: node:20-alpine
+  #   working_dir: /app
+  #   command: ["sh", "-c", "npm ci && npm run dev -- --host 0.0.0.0 --port 5173"]
+  #   environment:
+  #     VITE_API_PROXY_TARGET: http://api:8000
+  #   ports:
+  #     - "5173:5173"
+  #   volumes:
+  #     - ./frontend:/app
+  #   depends_on:
+  #     api:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+  #   networks: [recsys]
 
   mlflow:
     image: python:3.11-slim
+    profiles: ["tracking"]
     command:
       [
         "/bin/sh",
         "-c",
-        "pip install mlflow==2.12.2 && mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow.db --default-artifact-root /mlflow/artifacts"
+        "pip install --no-cache-dir mlflow==2.12.2 && mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow.db --default-artifact-root /mlflow/artifacts",
       ]
     ports:
       - "127.0.0.1:5000:5000"
     volumes:
-      - ./deployment/mlflow:/mlflow
+      - mlflow_data:/mlflow
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:5000/ >/dev/null 2>&1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    networks: [recsys]
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.54.1
+    profiles: ["observability"]
     ports:
       - "127.0.0.1:9090:9090"
     volumes:
-      - ./deployment/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-      - ./deployment/monitoring/alerts.yml:/etc/prometheus/alerts.yml
+      - ./deployment/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deployment/monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
       - ./deployment/secrets/recsys-api-key:/etc/prometheus/secrets/recsys-api-key:ro
+      - prometheus_data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [recsys]
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.2.2
+    profiles: ["observability"]
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
-      - ./deployment/monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./deployment/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD before starting compose}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
     depends_on:
       - prometheus
+    restart: unless-stopped
+    networks: [recsys]
+
+networks:
+  recsys:
+    driver: bridge
+
+volumes:
+  mlflow_data:
+  prometheus_data:
+  grafana_data:

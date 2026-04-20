@@ -6,17 +6,29 @@ This document describes the deployment strategy for the recommendation system, f
 The project includes a `Dockerfile` and a `docker-compose.yaml` file to containerize the application and its dependencies.
 
 ### Services in Docker Compose
-- **api**: The FastAPI application serving the recommendations (Port `8000`). It mounts the models and config directories.
-- **mlflow**: MLflow tracking server for model registry and experiment tracking (Port `5000`).
-- **prometheus**: Prometheus server for scraping and storing metrics (Port `9090`).
-- **grafana**: Grafana dashboard for visualizing metrics (Port `3000`).
+- **api**: The FastAPI application serving recommendations (Port `8000`) with health checks.
+- **frontend**: Vite UI (Port `5173`) proxied to the API via `/api`.
+- **mlflow** *(profile: `tracking`)*: Local MLflow tracking server (Port `5000`).
+- **prometheus** *(profile: `observability`)*: Metrics collection (Port `9090`).
+- **grafana** *(profile: `observability`)*: Metrics visualization (Port `3000`).
 
-To start the full stack:
+To start local-first core services:
 ```bash
-export RECSYS_API_KEYS=<comma-separated-api-keys>
-export GRAFANA_ADMIN_PASSWORD=<strong-password>
+cp .env.example .env
+# set at minimum: RECSYS_API_KEYS
+docker compose up -d --build api frontend
+```
+
+To enable local observability:
+```bash
+# set GRAFANA_ADMIN_PASSWORD in .env
 printf '%s' "${RECSYS_API_KEYS%%,*}" > deployment/secrets/recsys-api-key
-docker-compose up -d
+docker compose --profile observability up -d prometheus grafana
+```
+
+To enable local MLflow:
+```bash
+docker compose --profile tracking up -d mlflow
 ```
 
 Compose binds MLflow, Prometheus, and Grafana to `127.0.0.1` by default.
@@ -29,6 +41,8 @@ Kubernetes manifests are located in the `deployment/kubernetes/` directory.
 ### Components
 - **Deployment**: `api-deployment.yaml` defines the deployment for the `recsys-api`, ensuring a replica is running and configured with the correct environment variables (e.g., `RECSYS_MODEL_PATH`).
 - **Service**: `api-service.yaml` exposes the FastAPI deployment to be accessible within or outside the cluster.
+- **Ingress**: `api-ingress.yaml` exposes the API through AWS ALB with HTTPS and ExternalDNS annotations.
+- **Namespace/Account/Config**: `namespace.yaml`, `api-service-account.yaml`, and `recsys-serving-configmap.yaml` provide EKS-ready runtime defaults.
 
 ## CI/CD container publishing (GHCR)
 
@@ -68,11 +82,147 @@ The Kubernetes `recsys-secrets` Secret must contain:
 - `api-keys`
 - `dagshub-user-token`
 
-To deploy to a Kubernetes cluster:
+Create the secret (replace placeholders):
 ```bash
-kubectl apply -f deployment/kubernetes/
+kubectl -n recsys create secret generic recsys-secrets \
+  --from-literal=api-keys='<comma-separated-api-keys>' \
+  --from-literal=dagshub-user-token='<dagshub-token>'
+```
+
+Deploy with kustomize:
+```bash
+kubectl apply -k deployment/kubernetes/
 ```
 
 The Kubernetes deployment runs as a non-root user, defines health probes and
 resource bounds, and includes a NetworkPolicy that only allows selected
 in-cluster clients such as Prometheus or pods labeled `app=recsys-api-client`.
+
+Before applying ingress in EKS, update:
+
+- `deployment/kubernetes/api-ingress.yaml` host and ACM certificate ARN
+- `deployment/kubernetes/grafana-ingress.example.yaml` host/certificate when Grafana service is deployed
+
+## AWS EKS deployment (Terraform)
+
+EKS bootstrap Terraform is provided in `deployment/terraform/` to provision:
+
+1. VPC + subnets + NAT
+2. EKS cluster + managed node group
+3. IRSA roles for AWS Load Balancer Controller, ExternalDNS, cert-manager
+4. Helm add-ons: ALB controller, ExternalDNS, cert-manager, metrics-server
+
+Quick start:
+
+```bash
+cd deployment/terraform
+cp terraform.tfvars.example terraform.tfvars
+# update terraform.tfvars with your AWS region, subnet CIDRs, Route53 zone, and domain filters
+terraform init
+terraform plan
+terraform apply
+```
+
+Deployment target decisions for this repository:
+
+- **MLflow remains external on DagsHub** (no in-cluster MLflow deployment).
+- **Ingress strategy**: public ALB with HTTPS.
+- **DNS strategy**: Route53 records managed by ExternalDNS.
+
+After cluster bootstrap, the next step is adapting `deployment/kubernetes/` manifests
+for ingress hosts, certificates, and secret management in EKS.
+
+## EKS runtime manifests included
+
+The `deployment/kubernetes/` kustomization now includes:
+
+- API runtime: deployment, service, network policy, ALB ingress
+- Availability controls: `api-hpa.yaml`, `api-pdb.yaml`, zone spread/anti-affinity
+- Monitoring runtime: Prometheus + Grafana deployments/services/pdbs and datasource/config maps
+
+Create/update required secrets before applying:
+
+```bash
+kubectl -n recsys create secret generic recsys-secrets \
+  --from-literal=api-keys='<comma-separated-api-keys>' \
+  --from-literal=dagshub-user-token='<dagshub-token>' \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+kubectl -n recsys create secret generic recsys-monitoring-secrets \
+  --from-literal=recsys-api-key='<single-api-key-for-prometheus>' \
+  --from-literal=grafana-admin-password='<grafana-admin-password>' \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+Apply everything:
+
+```bash
+kubectl apply -k deployment/kubernetes/
+```
+
+## EKS deployment CI/CD
+
+Workflow `.github/workflows/deploy-eks.yml` performs EKS deployment after `publish-image` succeeds on `main`, and also supports manual `workflow_dispatch`.
+
+Required GitHub repository variables:
+
+- `AWS_REGION`
+- `EKS_CLUSTER_NAME`
+
+Required GitHub repository secrets:
+
+- `AWS_ROLE_TO_ASSUME`
+- `GHCR_USERNAME`
+- `GHCR_TOKEN`
+- `RECSYS_API_KEYS`
+- `DAGSHUB_USER_TOKEN`
+- `RECSYS_METRICS_API_KEY`
+- `GRAFANA_ADMIN_PASSWORD`
+
+## Continuous Training (CT) with model promotion gates
+
+Workflow `.github/workflows/ct-train.yml` handles CT:
+
+1. Trains + evaluates a selected data version/model profile.
+2. Reads generated metrics JSON outputs.
+3. Applies quality gates (minimum `hr@k`, optional improvement over baseline).
+4. Promotes MLflow registry alias (default `Production`) when gates pass.
+
+Default baseline for the improvement gate is `metrics/evaluation_metrics.json`.
+You can run CT manually with custom inputs (`data_version`, `model_profile`,
+`min_hr_at_k`, `require_improvement`, `target_alias`) or let the weekly schedule run.
+
+Additional GitHub repository secrets needed for CT:
+
+- `DAGSHUB_USER_TOKEN`
+- `DAGSHUB_USERNAME`
+
+If you want serving to load promoted registry models directly, enable
+`serving.model_registry.enabled` and set `serving.model_registry.model_name` /
+`model_alias` in serving config.
+
+## Operations runbook (EKS + CT)
+
+1. **Bootstrap**
+   - Apply Terraform: `terraform -chdir=deployment/terraform apply`
+   - Seed Kubernetes secrets (`recsys-secrets`, `recsys-monitoring-secrets`, `ghcr-pull-secret`)
+   - Deploy manifests: `kubectl apply -k deployment/kubernetes/`
+
+2. **Release / rollback**
+   - Deploy via GitHub Actions `deploy-eks` workflow.
+   - Rollback app quickly with:
+     ```bash
+     kubectl -n recsys rollout undo deployment/recsys-api
+     kubectl -n recsys rollout status deployment/recsys-api
+     ```
+   - If infra changes caused issues, revert Terraform module inputs and re-apply.
+
+3. **CT promotion controls**
+   - Run `ct-train` manually for ad-hoc retraining or rely on schedule.
+   - Promotion is blocked when quality gates fail (`min_hr_at_k`, optional baseline improvement).
+   - To stop auto-promotion, disable workflow schedule or set a stricter threshold.
+
+4. **Secret rotation**
+   - Rotate GitHub secrets first (`DAGSHUB_USER_TOKEN`, API keys, Grafana password).
+   - Re-run `deploy-eks` so Kubernetes secrets are reconciled from GitHub Actions.
+   - Confirm API and metrics auth health (`/health`, Prometheus target status).
