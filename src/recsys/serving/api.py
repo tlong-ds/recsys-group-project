@@ -39,6 +39,7 @@ def create_app(
     """Create a FastAPI app bound to a specific model artifact."""
     config_serving = serving_config or {}
     config_mlflow = mlflow_config or {}
+    preload_on_startup = bool(config_serving.get("preload_model_on_startup", True))
     security_settings = SecuritySettings.from_serving_config(config_serving)
     verify_api_key = auth_dependency(security_settings)
     resolved_model_path = str(
@@ -71,6 +72,7 @@ def create_app(
             model_alias = registry_cfg.get("model_alias")
             model_version = registry_cfg.get("model_version")
             artifact_path = str(registry_cfg.get("artifact_path", "registered_model"))
+            cache_dir = registry_cfg.get("local_cache_dir")
             try:
                 return Predictor.from_model_registry(
                     mlflow_config=config_mlflow,
@@ -78,6 +80,7 @@ def create_app(
                     model_alias=str(model_alias) if model_alias else None,
                     model_version=str(model_version) if model_version else None,
                     artifact_path=artifact_path,
+                    cache_dir=str(cache_dir) if cache_dir else None,
                 )
             except Exception:
                 if not bool(registry_cfg.get("fallback_to_filesystem", True)):
@@ -93,6 +96,17 @@ def create_app(
             "run_id": "",
         }
 
+    @app.on_event("startup")
+    def preload_model() -> None:
+        if not preload_on_startup:
+            return
+        try:
+            get_predictor_bundle()
+            app.state.model_preload_error = ""
+        except Exception as exc:
+            # Keep the app bootable; /health will report degraded if load still fails.
+            app.state.model_preload_error = str(exc)
+
     @app.get("/health")
     def health() -> dict[str, str]:
         try:
@@ -103,6 +117,7 @@ def create_app(
                 "model_name": meta.get("model_name", ""),
                 "model_version": meta.get("model_version", ""),
                 "model_alias": meta.get("model_alias", ""),
+                "cache_hit": meta.get("cache_hit", ""),
             }
         except Exception:
             return {

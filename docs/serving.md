@@ -18,11 +18,13 @@ Key settings:
 - `host`: Host IP (default: `0.0.0.0`)
 - `port`: Serving port (default: `8000`)
 - `model_path`: Path to the trained model directory or file (default: `models/trained/latest/`)
+- `preload_model_on_startup`: If `true`, loads the predictor during API startup to reduce first-request latency.
 - `default_top_k`: Default number of recommendations to return.
 - `model_registry.enabled`: Use MLflow Model Registry for model resolution.
 - `model_registry.model_name`: Registered model name in MLflow.
 - `model_registry.model_alias` or `model_registry.model_version`: Selector for deployable model.
 - `model_registry.artifact_path`: Artifact directory downloaded from selected run (default: `registered_model`).
+- `model_registry.local_cache_dir`: Optional persistent cache directory for downloaded registry artifacts.
 - `model_registry.fallback_to_filesystem`: If `true`, serving falls back to `model_path` when registry resolution fails.
 - `security.enabled`: Require API-key auth for protected endpoints.
 - `security.api_keys_env_var`: Environment variable containing comma-separated API keys.

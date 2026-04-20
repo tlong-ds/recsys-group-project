@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +33,7 @@ class Predictor:
         model_alias: str | None = None,
         model_version: str | None = None,
         artifact_path: str = "registered_model",
+        cache_dir: str | None = None,
     ) -> tuple[Predictor, dict[str, str]]:
         """Load model metadata from MLflow Registry, then fetch serving artifact."""
         from recsys.training.tracking import configure_tracking
@@ -45,7 +48,12 @@ class Predictor:
         else:
             raise ValueError("Either model_alias or model_version must be provided.")
 
-        local_path = Path(client.download_artifacts(version.run_id, artifact_path))
+        local_path, cache_hit = _resolve_registry_artifact(
+            client=client,
+            run_id=str(version.run_id),
+            artifact_path=artifact_path,
+            cache_dir=cache_dir,
+        )
         from recsys.models.srgnn import SRGNNRecommender
 
         predictor = cls(SRGNNRecommender.load(local_path))
@@ -56,6 +64,7 @@ class Predictor:
             "model_alias": model_alias or "",
             "run_id": str(version.run_id),
             "artifact_path": str(local_path),
+            "cache_hit": "true" if cache_hit else "false",
         }
         return predictor, metadata
 
@@ -74,3 +83,44 @@ def _mlflow_client():
     from mlflow.tracking import MlflowClient
 
     return MlflowClient()
+
+
+def _resolve_registry_artifact(
+    *,
+    client: Any,
+    run_id: str,
+    artifact_path: str,
+    cache_dir: str | None,
+) -> tuple[Path, bool]:
+    if not cache_dir:
+        return Path(client.download_artifacts(run_id, artifact_path)), False
+
+    cache_root = Path(cache_dir).expanduser()
+    key_input = f"{run_id}:{artifact_path}".encode()
+    artifact_key = hashlib.sha1(key_input).hexdigest()[:16]
+    target = cache_root / run_id / artifact_key
+
+    if _looks_like_model_artifact(target):
+        return target, True
+
+    downloaded = Path(client.download_artifacts(run_id, artifact_path))
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    if target.exists():
+        if target.is_dir():
+            shutil.rmtree(target)
+        else:
+            target.unlink()
+
+    if downloaded.is_dir():
+        shutil.copytree(downloaded, target, dirs_exist_ok=True)
+    else:
+        target.write_bytes(downloaded.read_bytes())
+
+    return target, False
+
+
+def _looks_like_model_artifact(path: Path) -> bool:
+    if path.is_file():
+        return True
+    return (path / "model.json").exists() or (path / "model.pt").exists()

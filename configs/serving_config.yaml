@@ -3,6 +3,7 @@ serving:
   port: 8000
   reload: false
   model_path: models/trained/latest/
+  preload_model_on_startup: true
   default_top_k: 10
   security:
     enabled: true
@@ -18,6 +19,7 @@ serving:
     model_alias: Production
     model_version: ""
     artifact_path: registered_model
+    local_cache_dir: .cache/recsys_registry
     fallback_to_filesystem: true
 
 mlflow:
