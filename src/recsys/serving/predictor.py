@@ -135,7 +135,7 @@ def _resolve_registry_artifact(
 
     cache_root = Path(cache_dir).expanduser()
     key_input = f"{run_id}:{artifact_path}".encode()
-    artifact_key = hashlib.sha1(key_input).hexdigest()[:16]
+    artifact_key = hashlib.sha256(key_input).hexdigest()[:16]
     target = cache_root / run_id / artifact_key
 
     if _looks_like_model_artifact(target):

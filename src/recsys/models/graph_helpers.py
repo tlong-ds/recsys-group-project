@@ -756,7 +756,8 @@ class GraphRecommenderBase:
         optimizer: torch.optim.Optimizer,
         criterion: nn.Module,
     ) -> float:
-        assert self._core is not None
+        if self._core is None:
+            raise RuntimeError("Model core is not initialized")
         self._core.train()
         total_loss, total_n = 0.0, 0
 
@@ -779,7 +780,8 @@ class GraphRecommenderBase:
 
     @torch.no_grad()
     def _eval_epoch(self, loader: DataLoader, criterion: nn.Module) -> float:
-        assert self._core is not None
+        if self._core is None:
+            raise RuntimeError("Model core is not initialized")
         self._core.eval()
         total_loss, total_n = 0.0, 0
 

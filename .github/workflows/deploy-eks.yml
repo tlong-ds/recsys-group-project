@@ -30,6 +30,7 @@ jobs:
   deploy:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    environment: production
     env:
       AWS_REGION: ${{ vars.AWS_REGION }}
       EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
@@ -102,4 +103,3 @@ jobs:
           kubectl -n recsys rollout status deployment/recsys-api --timeout=5m
           kubectl -n recsys rollout status deployment/prometheus --timeout=5m
           kubectl -n recsys rollout status deployment/grafana --timeout=5m
-

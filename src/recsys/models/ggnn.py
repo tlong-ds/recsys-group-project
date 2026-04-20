@@ -223,7 +223,8 @@ class GGNNRecommender(GraphRecommenderBase):
         return SessionGraphDataset(df, variant=VARIANT_SRGNN)
 
     def _forward_batch(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
-        assert self._core is not None
+        if self._core is None:
+            raise RuntimeError("Model core is not initialized")
         session_rep = self._core(
             items=batch["items"],
             alias_inputs=batch["alias_inputs"],

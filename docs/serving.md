@@ -56,11 +56,11 @@ promotions without changing image tags.
 To run the server locally, you can use the provided CLI entrypoint or Docker Compose:
 ```bash
 # Using Python
-export RECSYS_API_KEYS=local-dev-key
+export RECSYS_API_KEYS=<your-api-key>
 python -m recsys.serving.api --config configs/serving_config.yaml
 
 # Using Docker Compose
-export RECSYS_API_KEYS=local-dev-key
+export RECSYS_API_KEYS=<your-api-key>
 export GRAFANA_ADMIN_PASSWORD=<strong-password>
 printf '%s' "$RECSYS_API_KEYS" > deployment/secrets/recsys-api-key
 docker compose up api
@@ -69,7 +69,7 @@ docker compose up api
 Send protected requests with:
 
 ```bash
-curl -H "Authorization: Bearer local-dev-key" \
+curl -H "Authorization: Bearer <your-api-key>" \
   -H "Content-Type: application/json" \
   -d '{"item_sequence":[101,205,330],"top_k":10}' \
   http://localhost:8000/recommend
