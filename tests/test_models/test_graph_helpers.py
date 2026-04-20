@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from types import MethodType
+
 import numpy as np
 import pandas as pd
 import torch
-from types import MethodType
 
 from recsys.models.graph_helpers import (
     _build_ngc_row_totals,

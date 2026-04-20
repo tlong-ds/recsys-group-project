@@ -32,8 +32,7 @@ import pytest
 
 # Pipeline is imported at module level — stubs are already in sys.modules
 # (conftest.py installs them before collection starts).
-from recsys.training.pipeline import run_training_pipeline, build_model
-
+from recsys.training.pipeline import build_model, run_training_pipeline
 
 # ---------------------------------------------------------------------------
 # Tiny dataset helpers  (identical schema to production preprocessing)
@@ -60,8 +59,8 @@ def _examples() -> pd.DataFrame:
                 np.asarray([0, 1], dtype=np.int64),
             ],
             "item_seq_len": [2, 2, 2],
-            "pos_items":    [3, 4, 4],
-            "session_id":   [11, 12, 13],
+            "pos_items": [3, 4, 4],
+            "session_id": [11, 12, 13],
         }
     )
 
@@ -77,17 +76,17 @@ def _write_examples_parquet(df: pd.DataFrame, path: Path) -> None:
             ],
             "alias_inputs": [list(map(int, v.tolist())) for v in df["alias_inputs"]],
             "item_seq_len": df["item_seq_len"].astype(int).tolist(),
-            "pos_items":    df["pos_items"].astype(int).tolist(),
-            "session_id":   df["session_id"].astype(int).tolist(),
+            "pos_items": df["pos_items"].astype(int).tolist(),
+            "session_id": df["session_id"].astype(int).tolist(),
         },
         schema=pa.schema(
             [
-                pa.field("x",            pa.list_(pa.int64())),
-                pa.field("edge_index",   pa.list_(pa.list_(pa.int64()))),
+                pa.field("x", pa.list_(pa.int64())),
+                pa.field("edge_index", pa.list_(pa.list_(pa.int64()))),
                 pa.field("alias_inputs", pa.list_(pa.int64())),
                 pa.field("item_seq_len", pa.int64()),
-                pa.field("pos_items",    pa.int64()),
-                pa.field("session_id",   pa.int64()),
+                pa.field("pos_items", pa.int64()),
+                pa.field("session_id", pa.int64()),
             ]
         ),
     )
@@ -106,12 +105,12 @@ def data_dir(tmp_path: Path) -> Path:
     d.mkdir(parents=True)
 
     train_df = _examples()
-    val_df   = _examples().iloc[:1].copy()
-    test_df  = _examples().iloc[1:2].copy()
+    val_df = _examples().iloc[:1].copy()
+    test_df = _examples().iloc[1:2].copy()
 
     _write_examples_parquet(train_df, d / "train_examples.parquet")
-    _write_examples_parquet(val_df,   d / "val_examples.parquet")
-    _write_examples_parquet(test_df,  d / "test_examples.parquet")
+    _write_examples_parquet(val_df, d / "val_examples.parquet")
+    _write_examples_parquet(test_df, d / "test_examples.parquet")
 
     (d / "item_vocab.json").write_text(
         json.dumps({"item2id": {"101": 1, "102": 2, "103": 3, "104": 4}}),
@@ -132,35 +131,35 @@ def _config(
 ) -> dict[str, Any]:
     """Return a minimal pipeline config with model_overrides applied."""
     model: dict[str, Any] = {
-        "embedding_dim":      8,
-        "hidden_size":        8,
-        "step":               1,
+        "embedding_dim": 8,
+        "hidden_size": 8,
+        "step": 1,
         "max_session_length": 5,
-        "fallback_weight":    0.0,
-        "version":            "test",
+        "fallback_weight": 0.0,
+        "version": "test",
     }
     model.update(model_overrides)
     return {
         "data": {
             "train_examples_path": str(data_dir / "train_examples.parquet"),
-            "val_examples_path":   str(data_dir / "val_examples.parquet"),
-            "test_examples_path":  str(data_dir / "test_examples.parquet"),
-            "item_vocab_path":     str(data_dir / "item_vocab.json"),
+            "val_examples_path": str(data_dir / "val_examples.parquet"),
+            "test_examples_path": str(data_dir / "test_examples.parquet"),
+            "item_vocab_path": str(data_dir / "item_vocab.json"),
         },
-        "model":    model,
+        "model": model,
         "training": {
-            "seed":                    7,
-            "device":                  "cpu",
-            "batch_size":              2,
-            "num_epochs":              1,
-            "lr":                      1e-2,
-            "weight_decay":            0.0,
+            "seed": 7,
+            "device": "cpu",
+            "batch_size": 2,
+            "num_epochs": 1,
+            "lr": 1e-2,
+            "weight_decay": 0.0,
             "early_stopping_patience": 1,
-            "top_k":                   3,
-            "num_workers":             0,
+            "top_k": 3,
+            "num_workers": 0,
         },
         "registry": {"root_path": str(registry_root)},
-        "mlflow":   {"enabled": False},
+        "mlflow": {"enabled": False},
     }
 
 
@@ -171,9 +170,9 @@ def _config(
 
 def _assert_result(result: dict[str, Any]) -> None:
     """Assert the pipeline contract every successful run must satisfy."""
-    assert "artifact_path"      in result
+    assert "artifact_path" in result
     assert "validation_metrics" in result
-    assert "test_metrics"       in result
+    assert "test_metrics" in result
 
     assert Path(result["artifact_path"]).exists(), (
         f"artifact_path does not exist: {result['artifact_path']}"
@@ -186,7 +185,7 @@ def _assert_result(result: dict[str, Any]) -> None:
     )
     for k, v in {**result["validation_metrics"], **result["test_metrics"]}.items():
         assert isinstance(v, float), f"metric {k} is not a float: {v!r}"
-        assert 0.0 <= v <= 1.0,      f"metric {k} out of [0,1]: {v}"
+        assert 0.0 <= v <= 1.0, f"metric {k} out of [0,1]: {v}"
 
 
 # ---------------------------------------------------------------------------
@@ -202,7 +201,8 @@ class TestSRGNNPipeline:
     ) -> None:
         """Original test format — mirrors the reference test exactly."""
         config = _config(
-            data_dir, tmp_path / "models",
+            data_dir,
+            tmp_path / "models",
             {"type": "srgnn", "variant": "srgnn", "name": "srgnn"},
         )
         result = run_training_pipeline(config)
@@ -210,35 +210,40 @@ class TestSRGNNPipeline:
 
     def test_pipeline_srgnn_ngc(self, data_dir: Path, tmp_path: Path) -> None:
         config = _config(
-            data_dir, tmp_path / "models",
+            data_dir,
+            tmp_path / "models",
             {"type": "srgnn", "variant": "srgnn-ngc", "name": "srgnn-ngc"},
         )
         _assert_result(run_training_pipeline(config))
 
     def test_pipeline_srgnn_fc(self, data_dir: Path, tmp_path: Path) -> None:
         config = _config(
-            data_dir, tmp_path / "models",
+            data_dir,
+            tmp_path / "models",
             {"type": "srgnn", "variant": "srgnn-fc", "name": "srgnn-fc"},
         )
         _assert_result(run_training_pipeline(config))
 
     def test_pipeline_srgnn_local(self, data_dir: Path, tmp_path: Path) -> None:
         config = _config(
-            data_dir, tmp_path / "models",
+            data_dir,
+            tmp_path / "models",
             {"type": "srgnn", "variant": "srgnn-l", "name": "srgnn-l"},
         )
         _assert_result(run_training_pipeline(config))
 
     def test_pipeline_srgnn_avg(self, data_dir: Path, tmp_path: Path) -> None:
         config = _config(
-            data_dir, tmp_path / "models",
+            data_dir,
+            tmp_path / "models",
             {"type": "srgnn", "variant": "srgnn-avg", "name": "srgnn-avg"},
         )
         _assert_result(run_training_pipeline(config))
 
     def test_pipeline_srgnn_att(self, data_dir: Path, tmp_path: Path) -> None:
         config = _config(
-            data_dir, tmp_path / "models",
+            data_dir,
+            tmp_path / "models",
             {"type": "srgnn", "variant": "srgnn-att", "name": "srgnn-att"},
         )
         _assert_result(run_training_pipeline(config))
@@ -257,7 +262,8 @@ class TestTAGNNPipeline:
     ) -> None:
         """chunk_size > n_items: single chunk covers the whole catalogue."""
         config = _config(
-            data_dir, tmp_path / "models",
+            data_dir,
+            tmp_path / "models",
             {"type": "tagnn", "name": "tagnn", "score_chunk_size": 16},
         )
         _assert_result(run_training_pipeline(config))
@@ -267,7 +273,8 @@ class TestTAGNNPipeline:
     ) -> None:
         """chunk_size=2 forces multiple loop iterations — exercises loop boundary."""
         config = _config(
-            data_dir, tmp_path / "models",
+            data_dir,
+            tmp_path / "models",
             {"type": "tagnn", "name": "tagnn-chunk2", "score_chunk_size": 2},
         )
         _assert_result(run_training_pipeline(config))
@@ -285,7 +292,8 @@ class TestGGNNPipeline:
         self, data_dir: Path, tmp_path: Path
     ) -> None:
         config = _config(
-            data_dir, tmp_path / "models",
+            data_dir,
+            tmp_path / "models",
             {"type": "ggnn", "name": "ggnn"},
         )
         _assert_result(run_training_pipeline(config))
@@ -295,7 +303,8 @@ class TestGGNNPipeline:
     ) -> None:
         """step=3 exercises 3 rounds of GRU propagation."""
         config = _config(
-            data_dir, tmp_path / "models",
+            data_dir,
+            tmp_path / "models",
             {"type": "ggnn", "name": "ggnn-step3", "step": 3},
         )
         _assert_result(run_training_pipeline(config))
@@ -310,16 +319,19 @@ class TestSaveLoadRoundTrip:
     """After a pipeline run the saved model must reload and produce
     identical recommendations via both recommend_from_graph and recommend."""
 
-    @pytest.mark.parametrize("model_type,extra", [
-        ("srgnn", {"variant": "srgnn"}),
-        ("srgnn", {"variant": "srgnn-ngc"}),
-        ("srgnn", {"variant": "srgnn-fc"}),
-        ("srgnn", {"variant": "srgnn-l"}),
-        ("srgnn", {"variant": "srgnn-avg"}),
-        ("srgnn", {"variant": "srgnn-att"}),
-        ("tagnn", {"score_chunk_size": 4}),
-        ("ggnn",  {}),
-    ])
+    @pytest.mark.parametrize(
+        "model_type,extra",
+        [
+            ("srgnn", {"variant": "srgnn"}),
+            ("srgnn", {"variant": "srgnn-ngc"}),
+            ("srgnn", {"variant": "srgnn-fc"}),
+            ("srgnn", {"variant": "srgnn-l"}),
+            ("srgnn", {"variant": "srgnn-avg"}),
+            ("srgnn", {"variant": "srgnn-att"}),
+            ("tagnn", {"score_chunk_size": 4}),
+            ("ggnn", {}),
+        ],
+    )
     def test_save_load_produces_identical_recommendations(
         self,
         model_type: str,
@@ -327,13 +339,14 @@ class TestSaveLoadRoundTrip:
         data_dir: Path,
         tmp_path: Path,
     ) -> None:
-        variant  = extra.get("variant", model_type)
-        name     = f"{variant}-roundtrip"
-        config   = _config(
-            data_dir, tmp_path / "models",
+        variant = extra.get("variant", model_type)
+        name = f"{variant}-roundtrip"
+        config = _config(
+            data_dir,
+            tmp_path / "models",
             {"type": model_type, "name": name, **extra},
         )
-        result       = run_training_pipeline(config)
+        result = run_training_pipeline(config)
         artifact_dir = Path(result["artifact_path"]).parent
 
         # Load via the correct class
@@ -360,7 +373,7 @@ class TestSaveLoadRoundTrip:
         recs_live = loaded.recommend(list(row["x"]), top_k=3)
 
         assert len(recs_graph_1) == 3, f"Expected 3 graph recs, got {len(recs_graph_1)}"
-        assert len(recs_live)    == 3, f"Expected 3 live recs, got {len(recs_live)}"
+        assert len(recs_live) == 3, f"Expected 3 live recs, got {len(recs_live)}"
 
         # Determinism: two identical calls must return the same ranked list
         assert recs_graph_1 == recs_graph_2, (
@@ -392,20 +405,22 @@ class TestEdgeCases:
     ) -> None:
         """val_df of size 1 must not crash early-stopping logic."""
         config = _config(
-            data_dir, tmp_path / "models",
+            data_dir,
+            tmp_path / "models",
             {"type": "srgnn", "variant": "srgnn", "name": "srgnn-tiny-val"},
         )
         _assert_result(run_training_pipeline(config))
 
-    def test_fallback_weight_nonzero(
-        self, data_dir: Path, tmp_path: Path
-    ) -> None:
+    def test_fallback_weight_nonzero(self, data_dir: Path, tmp_path: Path) -> None:
         """Popularity-blend must not error during recommendation."""
         config = _config(
-            data_dir, tmp_path / "models",
+            data_dir,
+            tmp_path / "models",
             {
-                "type": "srgnn", "variant": "srgnn",
-                "name": "srgnn-fallback", "fallback_weight": 0.1,
+                "type": "srgnn",
+                "variant": "srgnn",
+                "name": "srgnn-fallback",
+                "fallback_weight": 0.1,
             },
         )
         _assert_result(run_training_pipeline(config))
@@ -415,7 +430,8 @@ class TestEdgeCases:
     ) -> None:
         """step=3 must propagate correctly through the SR-GNN GNNCell."""
         config = _config(
-            data_dir, tmp_path / "models",
+            data_dir,
+            tmp_path / "models",
             {"type": "srgnn", "variant": "srgnn", "name": "srgnn-step3", "step": 3},
         )
         _assert_result(run_training_pipeline(config))

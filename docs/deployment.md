@@ -30,6 +30,27 @@ Kubernetes manifests are located in the `deployment/kubernetes/` directory.
 - **Deployment**: `api-deployment.yaml` defines the deployment for the `recsys-api`, ensuring a replica is running and configured with the correct environment variables (e.g., `RECSYS_MODEL_PATH`).
 - **Service**: `api-service.yaml` exposes the FastAPI deployment to be accessible within or outside the cluster.
 
+## CI/CD container publishing (GHCR)
+
+The repository includes a dedicated publish workflow:
+
+- `.github/workflows/publish-image.yml`
+
+Behavior:
+
+1. Runs after workflow `ci` completes successfully on `main`.
+2. Builds Docker image from `Dockerfile`.
+3. Pushes to `ghcr.io/<owner>/<repo>` with tags:
+   - `main`
+   - `sha-<short_sha>`
+
+To pull images from private GHCR repositories, authenticate first:
+
+```bash
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u <github-username> --password-stdin
+docker pull ghcr.io/<owner>/<repo>:main
+```
+
 ## Production model registry flow
 
 For production, prefer MLflow Model Registry as the deployment source of truth:

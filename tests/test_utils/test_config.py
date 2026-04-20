@@ -98,7 +98,9 @@ class TestConfigOverlay(unittest.TestCase):
             self.assertFalse(merged["mlflow"]["enabled"])
             self.assertEqual(merged["registry"]["root_path"], "models/trained")
 
-    def test_training_runtime_config_applies_data_overlay_from_separate_file(self) -> None:
+    def test_training_runtime_config_applies_data_overlay_from_separate_file(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
             data_cfg_path = root / "data.yaml"
@@ -130,7 +132,9 @@ class TestConfigOverlay(unittest.TestCase):
                 {
                     "data": {
                         "processed_path": "data/versions/v1/processed",
-                        "train_examples_path": "data/versions/v1/processed/train_examples.parquet",
+                        "train_examples_path": (
+                            "data/versions/v1/processed/train_examples.parquet"
+                        ),
                     }
                 },
             )
@@ -144,7 +148,9 @@ class TestConfigOverlay(unittest.TestCase):
             )
 
             self.assertEqual(merged["training"]["top_k"], 50)
-            self.assertEqual(merged["data"]["processed_path"], "data/versions/v1/processed")
+            self.assertEqual(
+                merged["data"]["processed_path"], "data/versions/v1/processed"
+            )
             self.assertEqual(
                 merged["data"]["train_examples_path"],
                 "data/versions/v1/processed/train_examples.parquet",

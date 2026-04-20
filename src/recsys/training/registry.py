@@ -50,7 +50,9 @@ class ModelRegistry:
         else:
             artifact_path = model.save(latest_dir)
 
-        (latest_dir / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
+        (latest_dir / "config.json").write_text(
+            json.dumps(config, indent=2), encoding="utf-8"
+        )
         (latest_dir / "metrics.json").write_text(
             json.dumps(metrics or {}, indent=2),
             encoding="utf-8",

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import math
-
 
 def hit_rate_at_k(recommended: list[int], relevant: list[int], k: int) -> float:
     """Return 1 when any relevant item appears in the top-k list, else 0."""
@@ -17,6 +15,3 @@ def mrr_at_k(recommended: list[int], relevant: list[int], k: int) -> float:
         if item in relevant:
             return 1.0 / rank
     return 0.0
-
-
-

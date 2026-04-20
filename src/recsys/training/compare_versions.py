@@ -54,10 +54,9 @@ def _build_version_entry(
         )
 
     version_name = eval_version or train_version or requested_name
-    data_params_path = (
-        _string_or_none(eval_payload.get("data_params_path"))
-        or _string_or_none(train_payload.get("data_params_path"))
-    )
+    data_params_path = _string_or_none(
+        eval_payload.get("data_params_path")
+    ) or _string_or_none(train_payload.get("data_params_path"))
 
     return {
         "name": version_name,
@@ -93,7 +92,8 @@ def _parse_spec(raw: str) -> tuple[str, str, str]:
     parts = [part.strip() for part in raw.split(",")]
     if len(parts) != 3 or any(not part for part in parts):
         raise argparse.ArgumentTypeError(
-            "Each --spec must be 'version_name,train_metrics_path,evaluation_metrics_path'."
+            "Each --spec must be "
+            "'version_name,train_metrics_path,evaluation_metrics_path'."
         )
     return parts[0], parts[1], parts[2]
 

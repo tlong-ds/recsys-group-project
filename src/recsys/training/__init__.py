@@ -1,5 +1,6 @@
 """Training pipeline, orchestration, and local registry."""
 
+
 def run_training_pipeline(config):
     from recsys.training.pipeline import run_training_pipeline as _run_training_pipeline
 

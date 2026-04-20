@@ -12,9 +12,18 @@ from recsys.training.registry import ModelRegistry
 def _graph_examples() -> pd.DataFrame:
     return pd.DataFrame(
         {
-            "x": [np.asarray([1, 2], dtype=np.int64), np.asarray([2, 3], dtype=np.int64)],
-            "edge_index": [np.asarray([[0], [1]], dtype=np.int64), np.asarray([[0], [1]], dtype=np.int64)],
-            "alias_inputs": [np.asarray([0, 1], dtype=np.int64), np.asarray([0, 1], dtype=np.int64)],
+            "x": [
+                np.asarray([1, 2], dtype=np.int64),
+                np.asarray([2, 3], dtype=np.int64),
+            ],
+            "edge_index": [
+                np.asarray([[0], [1]], dtype=np.int64),
+                np.asarray([[0], [1]], dtype=np.int64),
+            ],
+            "alias_inputs": [
+                np.asarray([0, 1], dtype=np.int64),
+                np.asarray([0, 1], dtype=np.int64),
+            ],
             "item_seq_len": [2, 2],
             "pos_items": [3, 4],
             "session_id": [1, 2],
@@ -30,7 +39,9 @@ def test_register_writes_latest_artifact(tmp_path: Path) -> None:
     )
 
     registry = ModelRegistry(tmp_path)
-    artifact_path = registry.register(model, config={"model": {"name": "srgnn"}}, metrics={})
+    artifact_path = registry.register(
+        model, config={"model": {"name": "srgnn"}}, metrics={}
+    )
 
     assert artifact_path.exists()
     assert registry.latest_model_path().exists()
@@ -44,7 +55,9 @@ def test_register_can_skip_versioned_dirs(tmp_path: Path) -> None:
     )
 
     registry = ModelRegistry(tmp_path, create_versioned=False)
-    artifact_path = registry.register(model, config={"model": {"name": "srgnn"}}, metrics={})
+    artifact_path = registry.register(
+        model, config={"model": {"name": "srgnn"}}, metrics={}
+    )
 
     latest_model_path = registry.latest_model_path()
     assert artifact_path.parent == latest_model_path

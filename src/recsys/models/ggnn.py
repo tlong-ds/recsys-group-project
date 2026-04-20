@@ -39,12 +39,10 @@ import torch
 import torch.nn as nn
 
 from recsys.models.graph_helpers import (
+    VARIANT_SRGNN,
     GraphRecommenderBase,
     SessionEncoderBase,
     SessionGraphDataset,
-    VARIANT_SRGNN,
-    _to_int_array,
-    _to_edge_index,
     build_adjacency,
 )
 
@@ -76,28 +74,26 @@ class _GGNNPropagation(nn.Module):
         self.hidden_size = hidden_size
 
         # Neighbourhood projection for incoming / outgoing edges
-        self.W_in  = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.W_in = nn.Linear(hidden_size, hidden_size, bias=False)
         self.W_out = nn.Linear(hidden_size, hidden_size, bias=False)
         # Aggregation projection: combines in + out → GRU input dimension
         self.W_agg = nn.Linear(hidden_size * 2, hidden_size, bias=True)
         # Standard GRU cell (input_size = hidden_size, hidden_size = hidden_size)
-        self.gru   = nn.GRUCell(hidden_size, hidden_size)
+        self.gru = nn.GRUCell(hidden_size, hidden_size)
 
-    def forward(
-        self, hidden: torch.Tensor, adjacency: torch.Tensor
-    ) -> torch.Tensor:
+    def forward(self, hidden: torch.Tensor, adjacency: torch.Tensor) -> torch.Tensor:
         B, n_nodes, D = hidden.shape
-        a_in  = adjacency[:, :, :n_nodes]          # (B, n, n)
-        a_out = adjacency[:, :, n_nodes:]           # (B, n, n)
+        a_in = adjacency[:, :, :n_nodes]  # (B, n, n)
+        a_out = adjacency[:, :, n_nodes:]  # (B, n, n)
 
-        msg_in  = torch.bmm(a_in,  self.W_in(hidden))    # (B, n, D)
-        msg_out = torch.bmm(a_out, self.W_out(hidden))   # (B, n, D)
-        a_v     = self.W_agg(torch.cat([msg_in, msg_out], dim=-1))  # (B, n, D)
+        msg_in = torch.bmm(a_in, self.W_in(hidden))  # (B, n, D)
+        msg_out = torch.bmm(a_out, self.W_out(hidden))  # (B, n, D)
+        a_v = self.W_agg(torch.cat([msg_in, msg_out], dim=-1))  # (B, n, D)
 
         # Apply GRUCell node-wise: reshape (B, n, D) → (B*n, D)
         a_flat = a_v.reshape(B * n_nodes, D)
         h_flat = hidden.reshape(B * n_nodes, D)
-        h_new  = self.gru(a_flat, h_flat)           # (B*n, D)
+        h_new = self.gru(a_flat, h_flat)  # (B*n, D)
         return h_new.reshape(B, n_nodes, D)
 
 
@@ -122,15 +118,15 @@ class _GGNNCore(SessionEncoderBase):
     def __init__(self, n_items: int, embedding_dim: int, step: int) -> None:
         super().__init__()
         self.embedding_dim = embedding_dim
-        self.step          = step
+        self.step = step
 
         self.item_embedding = nn.Embedding(n_items + 1, embedding_dim, padding_idx=0)
-        self.propagation    = _GGNNPropagation(embedding_dim)
+        self.propagation = _GGNNPropagation(embedding_dim)
 
         # Readout: same as SR-GNN's attention-hybrid pooling
-        self.linear_one       = nn.Linear(embedding_dim, embedding_dim, bias=True)
-        self.linear_two       = nn.Linear(embedding_dim, embedding_dim, bias=True)
-        self.linear_three     = nn.Linear(embedding_dim, 1,             bias=False)
+        self.linear_one = nn.Linear(embedding_dim, embedding_dim, bias=True)
+        self.linear_two = nn.Linear(embedding_dim, embedding_dim, bias=True)
+        self.linear_three = nn.Linear(embedding_dim, 1, bias=False)
         self.linear_transform = nn.Linear(embedding_dim * 2, embedding_dim, bias=True)
 
         self._reset_parameters()
@@ -149,23 +145,23 @@ class _GGNNCore(SessionEncoderBase):
         **_kwargs: Any,
     ) -> torch.Tensor:
         # ── GGNN propagation ─────────────────────────────────────────────────
-        hidden = self.item_embedding(items)            # (B, n_nodes, D)
+        hidden = self.item_embedding(items)  # (B, n_nodes, D)
         for _ in range(self.step):
             hidden = self.propagation(hidden, adjacency)
 
         # Gather in sequence order
-        D          = hidden.size(-1)
+        D = hidden.size(-1)
         gather_idx = alias_inputs.unsqueeze(-1).expand(-1, -1, D)
-        seq_hidden = torch.gather(hidden, 1, gather_idx)   # (B, L, D)
+        seq_hidden = torch.gather(hidden, 1, gather_idx)  # (B, L, D)
 
         # Last-item representation
-        lengths  = seq_mask.sum(dim=1) - 1
-        batch_i  = torch.arange(hidden.size(0), device=hidden.device)
-        ht       = seq_hidden[batch_i, lengths]             # (B, D)
+        lengths = seq_mask.sum(dim=1) - 1
+        batch_i = torch.arange(hidden.size(0), device=hidden.device)
+        ht = seq_hidden[batch_i, lengths]  # (B, D)
 
         # ── Attention-hybrid readout (same as SR-GNN) ────────────────────────
-        q1    = self.linear_one(ht).unsqueeze(1)
-        q2    = self.linear_two(seq_hidden)
+        q1 = self.linear_one(ht).unsqueeze(1)
+        q2 = self.linear_two(seq_hidden)
         alpha = self.linear_three(torch.sigmoid(q1 + q2)).squeeze(-1)
         alpha = alpha.masked_fill(~seq_mask, float("-inf"))
         alpha = torch.softmax(alpha, dim=1).unsqueeze(-1)
@@ -228,24 +224,24 @@ class GGNNRecommender(GraphRecommenderBase):
 
     def _forward_batch(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
         assert self._core is not None
-        session_rep  = self._core(
-            items        = batch["items"],
-            alias_inputs = batch["alias_inputs"],
-            adjacency    = batch["adjacency"],
-            seq_mask     = batch["seq_mask"],
+        session_rep = self._core(
+            items=batch["items"],
+            alias_inputs=batch["alias_inputs"],
+            adjacency=batch["adjacency"],
+            seq_mask=batch["seq_mask"],
         )
-        scores       = self._core.compute_scores(session_rep)
+        scores = self._core.compute_scores(session_rep)
         scores[:, 0] = float("-inf")
         return scores
 
     def _graph_from_sequence(
         self, encoded_items: Sequence[int]
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        unique_nodes: list[int]     = []
+        unique_nodes: list[int] = []
         node_to_idx: dict[int, int] = {}
-        alias_list: list[int]       = []
-        edges_src: list[int]        = []
-        edges_dst: list[int]        = []
+        alias_list: list[int] = []
+        edges_src: list[int] = []
+        edges_dst: list[int] = []
 
         for item in encoded_items:
             if item not in node_to_idx:
@@ -257,12 +253,14 @@ class GGNNRecommender(GraphRecommenderBase):
             edges_src.append(alias_list[i])
             edges_dst.append(alias_list[i + 1])
 
-        alias_arr  = np.asarray(alias_list, dtype=np.int64)
+        alias_arr = np.asarray(alias_list, dtype=np.int64)
         edge_index = (
-            np.vstack([
-                np.asarray(edges_src, dtype=np.int64),
-                np.asarray(edges_dst, dtype=np.int64),
-            ])
+            np.vstack(
+                [
+                    np.asarray(edges_src, dtype=np.int64),
+                    np.asarray(edges_dst, dtype=np.int64),
+                ]
+            )
             if edges_src
             else np.empty((2, 0), dtype=np.int64)
         )
@@ -270,8 +268,8 @@ class GGNNRecommender(GraphRecommenderBase):
 
         return (
             torch.tensor(unique_nodes, dtype=torch.long).unsqueeze(0).to(self.device),
-            torch.tensor(alias_list,   dtype=torch.long).unsqueeze(0).to(self.device),
-            torch.tensor(adj_np,       dtype=torch.float32).unsqueeze(0).to(self.device),
+            torch.tensor(alias_list, dtype=torch.long).unsqueeze(0).to(self.device),
+            torch.tensor(adj_np, dtype=torch.float32).unsqueeze(0).to(self.device),
             torch.ones((1, len(alias_list)), dtype=torch.bool, device=self.device),
         )
 
@@ -285,11 +283,11 @@ class GGNNRecommender(GraphRecommenderBase):
     @classmethod
     def load(
         cls, path: str | Path, device: str | torch.device | None = None
-    ) -> "GGNNRecommender":
-        path      = Path(path)
+    ) -> GGNNRecommender:
+        path = Path(path)
         directory = path if path.is_dir() else path.parent
-        model, _  = cls._load_common(
+        model, _ = cls._load_common(
             directory,
             extra_init_kwargs={"device": device},
         )
-        return model   # type: ignore[return-value]
+        return model  # type: ignore[return-value]

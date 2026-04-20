@@ -39,7 +39,9 @@ class TestTracking(unittest.TestCase):
         fake_dagshub = SimpleNamespace(init=MagicMock())
 
         with patch("recsys.training.tracking.mlflow.set_experiment") as set_experiment:
-            with patch("recsys.training.tracking.mlflow.set_tracking_uri") as set_tracking_uri:
+            with patch(
+                "recsys.training.tracking.mlflow.set_tracking_uri"
+            ) as set_tracking_uri:
                 with patch.dict("sys.modules", {"dagshub": fake_dagshub}):
                     configure_tracking(config)
 
@@ -104,9 +106,15 @@ class TestTracking(unittest.TestCase):
                 }
             }
         }
-        with patch("recsys.training.tracking.mlflow.enable_system_metrics_logging") as enable_metrics:
-            with patch("recsys.training.tracking.mlflow.set_system_metrics_sampling_interval") as set_interval:
-                with patch("recsys.training.tracking.mlflow.set_system_metrics_samples_before_logging") as set_samples:
+        with patch(
+            "recsys.training.tracking.mlflow.enable_system_metrics_logging"
+        ) as enable_metrics:
+            with patch(
+                "recsys.training.tracking.mlflow.set_system_metrics_sampling_interval"
+            ) as set_interval:
+                with patch(
+                    "recsys.training.tracking.mlflow.set_system_metrics_samples_before_logging"
+                ) as set_samples:
                     configure_system_metrics(config)
 
         enable_metrics.assert_called_once()
@@ -115,6 +123,8 @@ class TestTracking(unittest.TestCase):
 
     def test_system_metrics_run_override_uses_config_flag(self) -> None:
         self.assertTrue(
-            system_metrics_run_override({"mlflow": {"system_metrics": {"enabled": True}}})
+            system_metrics_run_override(
+                {"mlflow": {"system_metrics": {"enabled": True}}}
+            )
         )
         self.assertIsNone(system_metrics_run_override({"mlflow": {}}))

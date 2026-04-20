@@ -191,6 +191,14 @@ mlflow:
 export DAGSHUB_USER_TOKEN=<your_personal_access_token>
 ```
 
+## CI/CD image publishing
+
+GitHub Actions publishes container images to GHCR after successful `ci` runs
+triggered by pushes to `main`.
+
+- Image: `ghcr.io/<owner>/<repo>`
+- Tags: `main` and `sha-<short_sha>`
+
 ## MLflow system metrics
 
 Enable MLflow system metrics collection by config:

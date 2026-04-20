@@ -40,7 +40,7 @@ class Evaluator:
         if examples.empty:
             return {"hr@k": 0.0, "mrr@k": 0.0}
 
-        hr_scores:  list[float] = []
+        hr_scores: list[float] = []
         mrr_scores: list[float] = []
 
         for row in examples.itertuples(index=False):
@@ -53,7 +53,7 @@ class Evaluator:
 
         count = len(hr_scores)
         return {
-            "hr@k":  sum(hr_scores)  / count,
+            "hr@k": sum(hr_scores) / count,
             "mrr@k": sum(mrr_scores) / count,
         }
 

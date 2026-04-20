@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
+
 from recsys.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -66,19 +67,25 @@ class DataLoader:
             sort_cols.append("sessionId")
         if "timeframe" in interactions.columns:
             sort_cols.append("timeframe")
-            
+
         if sort_cols:
             interactions = interactions.sort_values(sort_cols)
 
         interactions_path = self.interim_path / "interactions.parquet"
         interactions.to_parquet(interactions_path, index=False)
-        logger.info(f"Saved {len(interactions):,} item-view interactions to {interactions_path}")
+        logger.info(
+            f"Saved {len(interactions):,} item-view interactions to {interactions_path}"
+        )
 
         # 2. Generate ingest report
         report = {
             "n_interactions": len(interactions),
-            "n_sessions": interactions["sessionId"].nunique() if "sessionId" in interactions.columns else 0,
-            "n_items": interactions["itemId"].nunique() if "itemId" in interactions.columns else 0,
+            "n_sessions": interactions["sessionId"].nunique()
+            if "sessionId" in interactions.columns
+            else 0,
+            "n_items": interactions["itemId"].nunique()
+            if "itemId" in interactions.columns
+            else 0,
             "event_type_counts": {"view": len(interactions)},
         }
 

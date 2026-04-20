@@ -47,11 +47,11 @@ import torch
 import torch.nn as nn
 
 from recsys.models.graph_helpers import (
-    GraphRecommenderBase,
+    VARIANT_SRGNN,
     GNNCell,
+    GraphRecommenderBase,
     SessionEncoderBase,
     SessionGraphDataset,
-    VARIANT_SRGNN,
     build_adjacency,
 )
 
@@ -89,15 +89,15 @@ class _TAGNNCore(SessionEncoderBase):
         score_chunk_size: int = DEFAULT_SCORE_CHUNK,
     ) -> None:
         super().__init__()
-        self.embedding_dim    = embedding_dim
-        self.step             = step
+        self.embedding_dim = embedding_dim
+        self.step = step
         self.score_chunk_size = score_chunk_size
 
         self.item_embedding = nn.Embedding(n_items + 1, embedding_dim, padding_idx=0)
-        self.gnn            = GNNCell(embedding_dim, variant=VARIANT_SRGNN)
+        self.gnn = GNNCell(embedding_dim, variant=VARIANT_SRGNN)
 
         # W_t: projects each node hidden state for the target-attention dot product
-        self.W_t              = nn.Linear(embedding_dim, embedding_dim, bias=False)
+        self.W_t = nn.Linear(embedding_dim, embedding_dim, bias=False)
         # Merge target-pooled context with last-item embedding
         self.linear_transform = nn.Linear(embedding_dim * 2, embedding_dim, bias=True)
 
@@ -105,8 +105,8 @@ class _TAGNNCore(SessionEncoderBase):
 
         # Runtime cache populated by forward(); consumed by compute_scores()
         self._seq_hidden: torch.Tensor | None = None
-        self._seq_mask:   torch.Tensor | None = None
-        self._ht:         torch.Tensor | None = None
+        self._seq_mask: torch.Tensor | None = None
+        self._ht: torch.Tensor | None = None
 
     def _reset_parameters(self) -> None:
         bound = 1.0 / np.sqrt(self.embedding_dim)
@@ -119,10 +119,10 @@ class _TAGNNCore(SessionEncoderBase):
 
     def forward(
         self,
-        items:        torch.Tensor,   # (B, n_nodes)
-        alias_inputs: torch.Tensor,   # (B, L)
-        adjacency:    torch.Tensor,   # (B, n_nodes, 2*n_nodes)
-        seq_mask:     torch.Tensor,   # (B, L)
+        items: torch.Tensor,  # (B, n_nodes)
+        alias_inputs: torch.Tensor,  # (B, L)
+        adjacency: torch.Tensor,  # (B, n_nodes, 2*n_nodes)
+        seq_mask: torch.Tensor,  # (B, L)
         **_kwargs: Any,
     ) -> torch.Tensor:
         """GNN propagation + cache intermediate states for compute_scores.
@@ -131,24 +131,24 @@ class _TAGNNCore(SessionEncoderBase):
         session representation.  The real per-target scores are computed lazily
         in :meth:`compute_scores`.
         """
-        hidden = self.item_embedding(items)                             # (B, n, D)
+        hidden = self.item_embedding(items)  # (B, n, D)
         for _ in range(self.step):
             hidden = self.gnn(hidden, adjacency)
 
-        D          = hidden.size(-1)
+        D = hidden.size(-1)
         gather_idx = alias_inputs.unsqueeze(-1).expand(-1, -1, D)
-        seq_hidden = torch.gather(hidden, 1, gather_idx)               # (B, L, D)
+        seq_hidden = torch.gather(hidden, 1, gather_idx)  # (B, L, D)
 
         lengths = seq_mask.sum(dim=1) - 1
         batch_i = torch.arange(hidden.size(0), device=hidden.device)
-        ht      = seq_hidden[batch_i, lengths]                         # (B, D)
+        ht = seq_hidden[batch_i, lengths]  # (B, D)
 
         # Cache for compute_scores – avoids re-running the expensive GNN
         self._seq_hidden = seq_hidden
-        self._seq_mask   = seq_mask
-        self._ht         = ht
+        self._seq_mask = seq_mask
+        self._ht = ht
 
-        return ht   # placeholder; actual logits come from compute_scores()
+        return ht  # placeholder; actual logits come from compute_scores()
 
     # ------------------------------------------------------------------
     # Target-attentive session rep for a chunk of K candidates
@@ -156,10 +156,10 @@ class _TAGNNCore(SessionEncoderBase):
 
     def _session_rep_chunk(
         self,
-        seq_hidden: torch.Tensor,   # (B, L, D)
-        seq_mask:   torch.Tensor,   # (B, L)
-        ht:         torch.Tensor,   # (B, D)
-        E_chunk:    torch.Tensor,   # (K, D)  – embeddings of K candidate items
+        seq_hidden: torch.Tensor,  # (B, L, D)
+        seq_mask: torch.Tensor,  # (B, L)
+        ht: torch.Tensor,  # (B, D)
+        E_chunk: torch.Tensor,  # (K, D)  – embeddings of K candidate items
     ) -> torch.Tensor:
         """Compute target-specific session reps for K candidate items.
 
@@ -168,7 +168,7 @@ class _TAGNNCore(SessionEncoderBase):
         output     = W_out( [h_s(t) || h_T] )   shape (B, K, D)
         """
         B, L, D = seq_hidden.shape
-        K       = E_chunk.size(0)
+        K = E_chunk.size(0)
 
         # Project node hidden states: (B, L, D)
         Wt_seq = self.W_t(seq_hidden)
@@ -178,8 +178,8 @@ class _TAGNNCore(SessionEncoderBase):
         raw = torch.matmul(Wt_seq, E_chunk.t())
 
         # Mask sequence padding, then sigmoid-normalise
-        raw   = raw.masked_fill(~seq_mask.unsqueeze(-1), float("-inf"))
-        alpha = torch.sigmoid(raw)                                     # (B, L, K)
+        raw = raw.masked_fill(~seq_mask.unsqueeze(-1), float("-inf"))
+        alpha = torch.sigmoid(raw)  # (B, L, K)
         alpha = alpha * seq_mask.unsqueeze(-1).float()
         alpha = alpha / (alpha.sum(dim=1, keepdim=True) + 1e-9)
 
@@ -194,7 +194,7 @@ class _TAGNNCore(SessionEncoderBase):
             torch.cat([g_ctx, ht_exp], dim=-1).reshape(B * K, 2 * D)
         ).reshape(B, K, D)
 
-        return h_s                                                      # (B, K, D)
+        return h_s  # (B, K, D)
 
     # ------------------------------------------------------------------
     # Chunked full-catalogue scoring
@@ -208,24 +208,24 @@ class _TAGNNCore(SessionEncoderBase):
         """
         assert self._seq_hidden is not None, "Call forward() before compute_scores()"
 
-        seq_hidden = self._seq_hidden                   # (B, L, D)
-        seq_mask   = self._seq_mask                     # (B, L)
-        ht         = self._ht                           # (B, D)
-        E          = self.item_embedding.weight         # (n+1, D)
-        n          = E.size(0)
-        B          = seq_hidden.size(0)
+        seq_hidden = self._seq_hidden  # (B, L, D)
+        seq_mask = self._seq_mask  # (B, L)
+        ht = self._ht  # (B, D)
+        E = self.item_embedding.weight  # (n+1, D)
+        n = E.size(0)
+        B = seq_hidden.size(0)
 
         logits = torch.empty(B, n, device=seq_hidden.device, dtype=seq_hidden.dtype)
 
         for start in range(0, n, self.score_chunk_size):
-            end     = min(start + self.score_chunk_size, n)
-            E_chunk = E[start:end]                                      # (K, D)
+            end = min(start + self.score_chunk_size, n)
+            E_chunk = E[start:end]  # (K, D)
 
             # (B, K, D) * (1, K, D) -> sum over D -> (B, K)
             h_s = self._session_rep_chunk(seq_hidden, seq_mask, ht, E_chunk)
             logits[:, start:end] = (h_s * E_chunk.unsqueeze(0)).sum(dim=-1)
 
-        return logits                                                    # (B, n+1)
+        return logits  # (B, n+1)
 
 
 # ---------------------------------------------------------------------------
@@ -251,27 +251,27 @@ class TAGNNRecommender(GraphRecommenderBase):
 
     def __init__(
         self,
-        embedding_dim:    int   = 128,
-        hidden_size:      int   = 128,
-        step:             int   = 1,
+        embedding_dim: int = 128,
+        hidden_size: int = 128,
+        step: int = 1,
         max_session_length: int = 20,
-        fallback_weight:  float = 0.0,
-        model_name:       str | None = None,
-        model_version:    str   = "0.1.0",
-        seed:             int   = 42,
-        score_chunk_size: int   = DEFAULT_SCORE_CHUNK,
+        fallback_weight: float = 0.0,
+        model_name: str | None = None,
+        model_version: str = "0.1.0",
+        seed: int = 42,
+        score_chunk_size: int = DEFAULT_SCORE_CHUNK,
         device: str | torch.device | None = None,
     ) -> None:
         super().__init__(
-            embedding_dim      = embedding_dim,
-            hidden_size        = hidden_size,
-            step               = step,
-            max_session_length = max_session_length,
-            fallback_weight    = fallback_weight,
-            model_name         = model_name if model_name is not None else "tagnn",
-            model_version      = model_version,
-            seed               = seed,
-            device             = device,
+            embedding_dim=embedding_dim,
+            hidden_size=hidden_size,
+            step=step,
+            max_session_length=max_session_length,
+            fallback_weight=fallback_weight,
+            model_name=model_name if model_name is not None else "tagnn",
+            model_version=model_version,
+            seed=seed,
+            device=device,
         )
         self.score_chunk_size = score_chunk_size
 
@@ -281,10 +281,10 @@ class TAGNNRecommender(GraphRecommenderBase):
 
     def _build_core(self) -> _TAGNNCore:
         return _TAGNNCore(
-            n_items          = self.n_items,
-            embedding_dim    = self.embedding_dim,
-            step             = self.step,
-            score_chunk_size = self.score_chunk_size,
+            n_items=self.n_items,
+            embedding_dim=self.embedding_dim,
+            step=self.step,
+            score_chunk_size=self.score_chunk_size,
         )
 
     def _make_dataset(self, df: pd.DataFrame) -> SessionGraphDataset:
@@ -295,23 +295,23 @@ class TAGNNRecommender(GraphRecommenderBase):
         assert self._core is not None
         # forward() caches (seq_hidden, seq_mask, ht) as a side-effect
         self._core(
-            items        = batch["items"],
-            alias_inputs = batch["alias_inputs"],
-            adjacency    = batch["adjacency"],
-            seq_mask     = batch["seq_mask"],
+            items=batch["items"],
+            alias_inputs=batch["alias_inputs"],
+            adjacency=batch["adjacency"],
+            seq_mask=batch["seq_mask"],
         )
-        scores       = self._core.compute_scores(None)  # type: ignore[arg-type]
+        scores = self._core.compute_scores(None)  # type: ignore[arg-type]
         scores[:, 0] = float("-inf")
         return scores
 
     def _graph_from_sequence(
         self, encoded_items: Sequence[int]
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        unique_nodes: list[int]     = []
+        unique_nodes: list[int] = []
         node_to_idx: dict[int, int] = {}
-        alias_list:  list[int]      = []
-        edges_src:   list[int]      = []
-        edges_dst:   list[int]      = []
+        alias_list: list[int] = []
+        edges_src: list[int] = []
+        edges_dst: list[int] = []
 
         for item in encoded_items:
             if item not in node_to_idx:
@@ -323,12 +323,14 @@ class TAGNNRecommender(GraphRecommenderBase):
             edges_src.append(alias_list[i])
             edges_dst.append(alias_list[i + 1])
 
-        alias_arr  = np.asarray(alias_list, dtype=np.int64)
+        alias_arr = np.asarray(alias_list, dtype=np.int64)
         edge_index = (
-            np.vstack([
-                np.asarray(edges_src, dtype=np.int64),
-                np.asarray(edges_dst, dtype=np.int64),
-            ])
+            np.vstack(
+                [
+                    np.asarray(edges_src, dtype=np.int64),
+                    np.asarray(edges_dst, dtype=np.int64),
+                ]
+            )
             if edges_src
             else np.empty((2, 0), dtype=np.int64)
         )
@@ -336,8 +338,8 @@ class TAGNNRecommender(GraphRecommenderBase):
 
         return (
             torch.tensor(unique_nodes, dtype=torch.long).unsqueeze(0).to(self.device),
-            torch.tensor(alias_list,   dtype=torch.long).unsqueeze(0).to(self.device),
-            torch.tensor(adj_np,       dtype=torch.float32).unsqueeze(0).to(self.device),
+            torch.tensor(alias_list, dtype=torch.long).unsqueeze(0).to(self.device),
+            torch.tensor(adj_np, dtype=torch.float32).unsqueeze(0).to(self.device),
             torch.ones((1, len(alias_list)), dtype=torch.bool, device=self.device),
         )
 
@@ -361,11 +363,11 @@ class TAGNNRecommender(GraphRecommenderBase):
     @classmethod
     def load(
         cls, path: str | Path, device: str | torch.device | None = None
-    ) -> "TAGNNRecommender":
-        path      = Path(path)
+    ) -> TAGNNRecommender:
+        path = Path(path)
         directory = path if path.is_dir() else path.parent
-        model, _  = cls._load_common(
+        model, _ = cls._load_common(
             directory,
             extra_init_kwargs={"device": device},
         )
-        return model   # type: ignore[return-value]
+        return model  # type: ignore[return-value]

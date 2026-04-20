@@ -53,7 +53,8 @@ def configure_tracking(config: dict[str, Any]) -> None:
         owner, name = dagshub_repo(config)
         if not owner or not name:
             raise ValueError(
-                "DagsHub tracking is enabled, but mlflow.dagshub.repo_owner/repo_name are missing."
+                "DagsHub tracking is enabled, but "
+                "mlflow.dagshub.repo_owner/repo_name are missing."
             )
         try:
             import dagshub
@@ -88,8 +89,13 @@ def configure_system_metrics(config: dict[str, Any]) -> None:
             mlflow.disable_system_metrics_logging()
     if "sampling_interval" in sys_cfg and sys_cfg.get("sampling_interval") is not None:
         mlflow.set_system_metrics_sampling_interval(int(sys_cfg["sampling_interval"]))
-    if "samples_before_logging" in sys_cfg and sys_cfg.get("samples_before_logging") is not None:
-        mlflow.set_system_metrics_samples_before_logging(int(sys_cfg["samples_before_logging"]))
+    if (
+        "samples_before_logging" in sys_cfg
+        and sys_cfg.get("samples_before_logging") is not None
+    ):
+        mlflow.set_system_metrics_samples_before_logging(
+            int(sys_cfg["samples_before_logging"])
+        )
 
 
 def system_metrics_run_override(config: dict[str, Any]) -> bool | None:
@@ -121,7 +127,8 @@ def _configure_mlflow_auth_for_dagshub(dag_cfg: dict[str, Any]) -> None:
     token = os.getenv(token_env_name) or os.getenv("DAGSHUB_USER_TOKEN")
     password = os.getenv(password_env_name) or token
 
-    # dagshub.init() resolves auth from DAGSHUB_USER_TOKEN; map legacy token env if needed.
+    # dagshub.init() resolves auth from DAGSHUB_USER_TOKEN.
+    # Map legacy token env if needed.
     if token and not os.getenv("DAGSHUB_USER_TOKEN"):
         os.environ["DAGSHUB_USER_TOKEN"] = token
 

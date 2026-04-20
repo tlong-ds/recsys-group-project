@@ -71,8 +71,12 @@ def data_dir(tmp_path: Path) -> Path:
     data_path.mkdir(parents=True)
 
     _write_examples_parquet(_examples(), data_path / "train_examples.parquet")
-    _write_examples_parquet(_examples().iloc[:1].copy(), data_path / "val_examples.parquet")
-    _write_examples_parquet(_examples().iloc[1:2].copy(), data_path / "test_examples.parquet")
+    _write_examples_parquet(
+        _examples().iloc[:1].copy(), data_path / "val_examples.parquet"
+    )
+    _write_examples_parquet(
+        _examples().iloc[1:2].copy(), data_path / "test_examples.parquet"
+    )
     (data_path / "item_vocab.json").write_text(
         json.dumps({"item2id": {"101": 1, "102": 2, "103": 3, "104": 4}}),
         encoding="utf-8",
@@ -115,7 +119,9 @@ def _config(data_dir: Path, registry_root: Path) -> dict[str, object]:
     }
 
 
-def test_run_training_pipeline_uses_custom_output_paths(data_dir: Path, tmp_path: Path) -> None:
+def test_run_training_pipeline_uses_custom_output_paths(
+    data_dir: Path, tmp_path: Path
+) -> None:
     metrics_dir = tmp_path / "metrics" / "v1_strict_filter"
     registry_root = tmp_path / "models" / "trained" / "v1_strict_filter"
     versioned_dir = tmp_path / "data" / "versions" / "v1_strict_filter" / "processed"
@@ -135,7 +141,9 @@ def test_run_training_pipeline_uses_custom_output_paths(data_dir: Path, tmp_path
             target.write_bytes(source.read_bytes())
 
     config = _config(versioned_dir, registry_root)
-    config["training"]["train_metrics_path"] = str(metrics_dir / "training_metrics.json")
+    config["training"]["train_metrics_path"] = str(
+        metrics_dir / "training_metrics.json"
+    )
     config["training"]["evaluation_metrics_path"] = str(
         metrics_dir / "evaluation_metrics.json"
     )
@@ -155,10 +163,15 @@ def test_run_training_pipeline_uses_custom_output_paths(data_dir: Path, tmp_path
     train_payload = json.loads(train_metrics.read_text(encoding="utf-8"))
     eval_payload = json.loads(eval_metrics.read_text(encoding="utf-8"))
     assert train_payload["data_version"] == "v1_strict_filter"
-    assert eval_payload["data_params_path"] == "configs/data_versions/v1_strict_filter.yaml"
+    assert (
+        eval_payload["data_params_path"]
+        == "configs/data_versions/v1_strict_filter.yaml"
+    )
 
 
-def test_main_applies_runtime_overrides(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_main_applies_runtime_overrides(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     captured: dict[str, object] = {}
 
     def fake_load_training_runtime_config(**kwargs):
@@ -177,7 +190,9 @@ def test_main_applies_runtime_overrides(monkeypatch: pytest.MonkeyPatch, tmp_pat
         "recsys.training.pipeline.load_training_runtime_config",
         fake_load_training_runtime_config,
     )
-    monkeypatch.setattr("recsys.training.pipeline.run_train_stage", fake_run_train_stage)
+    monkeypatch.setattr(
+        "recsys.training.pipeline.run_train_stage", fake_run_train_stage
+    )
     monkeypatch.setattr(
         sys,
         "argv",

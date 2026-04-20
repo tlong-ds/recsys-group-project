@@ -55,7 +55,9 @@ def _registry_config(config: dict[str, Any]) -> dict[str, Any]:
     return registry_cfg if isinstance(registry_cfg, dict) else {}
 
 
-def _resolve_registry_model_name(*, config: dict[str, Any], registry_cfg: dict[str, Any]) -> str:
+def _resolve_registry_model_name(
+    *, config: dict[str, Any], registry_cfg: dict[str, Any]
+) -> str:
     template = str(
         registry_cfg.get("model_name_template")
         or registry_cfg.get("model_name")

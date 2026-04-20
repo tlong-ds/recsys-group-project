@@ -36,12 +36,14 @@ def resolve_torch_device(device: Any = None) -> torch.device:
             resolved = torch.device(requested)
         else:
             raise ValueError(
-                f"Unsupported device '{device}'. Use one of: auto, cpu, mps, cuda, cuda:N."
+                f"Unsupported device '{device}'. "
+                "Use one of: auto, cpu, mps, cuda, cuda:N."
             )
 
     if resolved.type == "cuda" and not torch.cuda.is_available():
         raise ValueError(
-            f"CUDA device '{resolved}' requested but CUDA is not available in this runtime."
+            f"CUDA device '{resolved}' requested "
+            "but CUDA is not available in this runtime."
         )
     if resolved.type == "mps" and not _mps_available():
         raise ValueError(

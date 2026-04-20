@@ -5,7 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from recsys.training.compare_versions import build_comparison_report, write_comparison_report
+from recsys.training.compare_versions import (
+    build_comparison_report,
+    write_comparison_report,
+)
 
 
 def test_build_comparison_report_merges_train_and_eval_payloads(tmp_path: Path) -> None:

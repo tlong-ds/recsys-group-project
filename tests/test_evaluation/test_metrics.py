@@ -13,4 +13,3 @@ class TestMetrics(unittest.TestCase):
 
     def test_mrr_at_k_uses_first_relevant_rank(self) -> None:
         self.assertAlmostEqual(mrr_at_k([4, 5, 6], [5], 3), 0.5)
-
