@@ -24,9 +24,11 @@ def register_model_version(
     client = _mlflow_client()
     try:
         client.create_registered_model(model_name)
-    except Exception:
+    except Exception as e:
         # Model may already exist in concurrent environments.
-        pass
+        err = str(e).lower()
+        if "resource_already_exists" not in err and "already exists" not in err:
+            raise
     version = client.create_model_version(
         name=model_name,
         source=source,

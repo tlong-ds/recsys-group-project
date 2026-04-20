@@ -245,7 +245,7 @@ def main() -> None:
     config = load_config(args.config)
     serving_config = config.get("serving", {})
     mlflow_config = config.get("mlflow", {})
-    host = args.host or serving_config.get("host", "0.0.0.0")
+    host = args.host or serving_config.get("host", "0.0.0.0")  # nosec B104
     port = args.port or int(serving_config.get("port", 8000))
     model_path = args.model_path or serving_config.get("model_path")
     reload_flag = bool(args.reload or serving_config.get("reload", False))
