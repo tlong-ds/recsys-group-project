@@ -155,3 +155,39 @@ class TestConfigOverlay(unittest.TestCase):
                 merged["data"]["train_examples_path"],
                 "data/versions/v1/processed/train_examples.parquet",
             )
+
+    def test_data_config_applies_logging_for_data_version_overlay(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            data_cfg_path = root / "data.yaml"
+            version_params_path = root / "v1.yaml"
+
+            _write_yaml(
+                data_cfg_path,
+                {
+                    "data": {
+                        "interim_path": "data/interim",
+                        "processed_path": "data/processed",
+                        "logging": {"report_path": "metrics/validation_report.json"},
+                    }
+                },
+            )
+            _write_yaml(
+                version_params_path,
+                {
+                    "data": {
+                        "interim_path": "data/versions/v1/interim",
+                        "processed_path": "data/versions/v1/processed",
+                        "logging": {
+                            "report_path": "data/versions/v1/validation_report.json"
+                        },
+                    }
+                },
+            )
+
+            merged = load_data_config_with_params(data_cfg_path, version_params_path)
+
+            self.assertEqual(
+                merged["logging"]["report_path"],
+                "data/versions/v1/validation_report.json",
+            )

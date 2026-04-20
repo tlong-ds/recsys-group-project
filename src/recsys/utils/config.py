@@ -110,9 +110,31 @@ def load_data_config_with_params(
         raise ValueError(f"Missing 'data' section in config: {data_config_path}")
 
     params_cfg = load_optional_config(params_path)
+    data_cfg = params_cfg.get("data", {})
     params_overlay = params_to_config_overlay(params_cfg).get("data", {})
     if not isinstance(params_overlay, dict):
         params_overlay = {}
+
+    # Data-version overlays (configs/data_versions/*.yaml) need to control where
+    # validation reports are written so DVC tracked outputs remain deterministic.
+    if (
+        isinstance(data_cfg, dict)
+        and any(
+            key in data_cfg
+            for key in (
+                "interim_path",
+                "processed_path",
+                "train_examples_path",
+                "val_examples_path",
+                "test_examples_path",
+                "item_vocab_path",
+            )
+        )
+    ):
+        logging_cfg = data_cfg.get("logging")
+        if isinstance(logging_cfg, dict) and logging_cfg:
+            params_overlay = merge_configs(params_overlay, {"logging": logging_cfg})
+
     return merge_configs(data_base, params_overlay)
 
 
