@@ -553,8 +553,8 @@ stages:
         - v2_sliding_window
         - v3_train_plus_val
       model_profile:
-        - srgnn_ngc
-        # - tagnn
+        #- srgnn_ngc
+        - tagnn
     cmd: >
       python -m recsys.training.pipeline --stage train --dvc-mode
       --data-config configs/data_config.yaml
@@ -604,9 +604,9 @@ stages:
       - src/recsys/training/tracking.py
       - src/recsys/training/mlflow_registry.py
       - src/recsys/models/graph_helpers.py
-      - src/recsys/models/srgnn.py
-      # - src/recsys/models/tagnn.py
-      - src/recsys/models/ggnn.py
+      #- src/recsys/models/srgnn.py
+      - src/recsys/models/tagnn.py
+      #- src/recsys/models/ggnn.py
       - src/recsys/evaluation/evaluator.py
       - src/recsys/evaluation/metrics.py
       - src/recsys/utils/config.py
@@ -692,8 +692,8 @@ stages:
         - v2_sliding_window
         - v3_train_plus_val
       model_profile:
-        - srgnn_ngc
-        # - tagnn
+        #- srgnn_ngc
+        - tagnn
     cmd: >
       python -m recsys.training.pipeline --stage evaluate --dvc-mode
       --data-config configs/data_config.yaml
@@ -726,9 +726,9 @@ stages:
       - src/recsys/training/pipeline.py
       - src/recsys/training/tracking.py
       - src/recsys/training/registry.py
-      - src/recsys/models/srgnn.py
-      # - src/recsys/models/tagnn.py
-      - src/recsys/models/ggnn.py
+      #- src/recsys/models/srgnn.py
+      - src/recsys/models/tagnn.py
+      #- src/recsys/models/ggnn.py
       - src/recsys/evaluation/evaluator.py
       - src/recsys/evaluation/metrics.py
       - src/recsys/utils/config.py
