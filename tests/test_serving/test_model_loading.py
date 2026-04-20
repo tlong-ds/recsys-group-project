@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -122,3 +123,47 @@ def test_registry_artifact_cache_reuses_download(tmp_path: Path) -> None:
     assert first_hit is False
     assert second_hit is True
     assert client.download_calls == 1
+
+
+def test_from_path_dispatches_tagnn_loader(monkeypatch, tmp_path: Path) -> None:
+    artifact_dir = tmp_path / "artifact_tagnn"
+    artifact_dir.mkdir(parents=True)
+    (artifact_dir / "model.json").write_text(
+        json.dumps({"model_type": "tagnn"}),
+        encoding="utf-8",
+    )
+
+    sentinel = object()
+    calls = {"tagnn": 0}
+
+    def _fake_tagnn_load(_path: Path):
+        calls["tagnn"] += 1
+        return sentinel
+
+    monkeypatch.setattr("recsys.models.tagnn.TAGNNRecommender.load", _fake_tagnn_load)
+
+    predictor = predictor_module.Predictor.from_path(str(artifact_dir))
+    assert predictor.model is sentinel
+    assert calls["tagnn"] == 1
+
+
+def test_from_path_dispatches_ggnn_loader(monkeypatch, tmp_path: Path) -> None:
+    artifact_dir = tmp_path / "artifact_ggnn"
+    artifact_dir.mkdir(parents=True)
+    (artifact_dir / "model.json").write_text(
+        json.dumps({"model_type": "ggnn"}),
+        encoding="utf-8",
+    )
+
+    sentinel = object()
+    calls = {"ggnn": 0}
+
+    def _fake_ggnn_load(_path: Path):
+        calls["ggnn"] += 1
+        return sentinel
+
+    monkeypatch.setattr("recsys.models.ggnn.GGNNRecommender.load", _fake_ggnn_load)
+
+    predictor = predictor_module.Predictor.from_path(str(artifact_dir))
+    assert predictor.model is sentinel
+    assert calls["ggnn"] == 1

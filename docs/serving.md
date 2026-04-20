@@ -8,7 +8,7 @@ The recommendation system uses **FastAPI** to provide a RESTful API for session-
 ## Key Components
 - **Framework**: FastAPI
 - **Main Application**: `src/recsys/serving/api.py`
-- **Predictor**: `src/recsys/serving/predictor.py` wraps the model inference logic.
+- **Predictor**: `src/recsys/serving/predictor.py` wraps inference and auto-dispatches to SRGNN/TAGNN/GGNN loaders based on artifact metadata (`model.json`).
 - **Schemas**: `src/recsys/serving/schemas.py` defines the Pydantic models for request and response validation.
 - **Server**: Uvicorn is used as the ASGI web server.
 

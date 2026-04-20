@@ -90,8 +90,8 @@ Generated model and metrics namespaces:
 Ad hoc train/evaluate with a specific data version:
 
 ```bash
-python -m recsys.training.pipeline --stage train --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params params.yaml --data-params configs/data_versions/v1_strict_filter.yaml --registry-root models/trained/v1_strict_filter --train-metrics-path metrics/v1_strict_filter/training_metrics.json
-python -m recsys.training.pipeline --stage evaluate --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params params.yaml --data-params configs/data_versions/v1_strict_filter.yaml --registry-root models/trained/v1_strict_filter --evaluation-metrics-path metrics/v1_strict_filter/evaluation_metrics.json
+python -m recsys.training.pipeline --stage train --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_profiles/srgnn.yaml --training-config configs/training_config.yaml --params configs/data_versions/v1_strict_filter.yaml --registry-root models/trained/v1_strict_filter --train-metrics-path metrics/v1_strict_filter/training_metrics.json
+python -m recsys.training.pipeline --stage evaluate --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_profiles/srgnn.yaml --training-config configs/training_config.yaml --params configs/data_versions/v1_strict_filter.yaml --registry-root models/trained/v1_strict_filter --evaluation-metrics-path metrics/v1_strict_filter/evaluation_metrics.json
 ```
 
 ## Model matrix training with DVC
@@ -104,16 +104,23 @@ Data versions are defined in `configs/data_versions/*.yaml`:
 
 - `v1_strict_filter`, `v2_sliding_window`, `v3_train_plus_val`
 
-Run the full cross-product:
+Run fast profiles (default iteration loop):
 
 ```bash
 dvc repro train_matrix evaluate_matrix
 ```
 
-Run one specific job:
+Run long-running profiles (`srgnn_ngc`, `tagnn`):
+
+```bash
+dvc repro train_matrix_slow evaluate_matrix_slow
+```
+
+Run one specific job (fast or slow):
 
 ```bash
 dvc repro train_matrix@v2_sliding_window-tagnn evaluate_matrix@v2_sliding_window-tagnn
+dvc repro train_matrix_slow@v2_sliding_window-tagnn evaluate_matrix_slow@v2_sliding_window-tagnn
 ```
 
 Artifacts and metrics are separated per job:

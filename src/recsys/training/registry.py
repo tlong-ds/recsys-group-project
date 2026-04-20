@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from recsys.models.srgnn import SRGNNRecommender
+from recsys.models.graph_helpers import GraphRecommenderBase
 
 
 class ModelRegistry:
@@ -24,7 +24,7 @@ class ModelRegistry:
 
     def register(
         self,
-        model: SRGNNRecommender,
+        model: GraphRecommenderBase,
         config: dict[str, Any],
         metrics: dict[str, float] | None = None,
     ) -> Path:

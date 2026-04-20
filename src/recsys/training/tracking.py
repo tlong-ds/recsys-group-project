@@ -8,7 +8,7 @@ from typing import Any
 
 import mlflow
 
-from recsys.models.srgnn import SRGNNRecommender
+from recsys.models.graph_helpers import GraphRecommenderBase
 
 DEFAULT_REPO_OWNER = "lytlong.pers"
 DEFAULT_REPO_NAME = "recsys-group-project"
@@ -138,7 +138,9 @@ def _configure_mlflow_auth_for_dagshub(dag_cfg: dict[str, Any]) -> None:
         os.environ["MLFLOW_TRACKING_PASSWORD"] = password
 
 
-def _training_params(config: dict[str, Any], model: SRGNNRecommender) -> dict[str, Any]:
+def _training_params(
+    config: dict[str, Any], model: GraphRecommenderBase
+) -> dict[str, Any]:
     model_cfg = config.get("model", {})
     training_cfg = config.get("training", {})
     params: dict[str, Any] = {
@@ -160,7 +162,7 @@ def _training_params(config: dict[str, Any], model: SRGNNRecommender) -> dict[st
 def log_training_run(
     *,
     config: dict[str, Any],
-    model: SRGNNRecommender,
+    model: GraphRecommenderBase,
     metrics: dict[str, float],
     artifact_path: Path,
 ) -> None:

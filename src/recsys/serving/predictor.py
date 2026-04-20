@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import shutil
 from pathlib import Path
 from typing import Any
@@ -20,9 +21,7 @@ class Predictor:
         path = Path(model_path)
         if not path.exists():
             raise FileNotFoundError(f"Model artifact not found at {path}")
-        from recsys.models.srgnn import SRGNNRecommender
-
-        return cls(SRGNNRecommender.load(path))
+        return cls(_load_model_artifact(path))
 
     @classmethod
     def from_model_registry(
@@ -54,9 +53,7 @@ class Predictor:
             artifact_path=artifact_path,
             cache_dir=cache_dir,
         )
-        from recsys.models.srgnn import SRGNNRecommender
-
-        predictor = cls(SRGNNRecommender.load(local_path))
+        predictor = cls(_load_model_artifact(local_path))
         metadata = {
             "source": "mlflow_registry",
             "model_name": model_name,
@@ -124,3 +121,33 @@ def _looks_like_model_artifact(path: Path) -> bool:
     if path.is_file():
         return True
     return (path / "model.json").exists() or (path / "model.pt").exists()
+
+
+def _load_model_artifact(path: Path) -> Any:
+    model_type = _model_type_from_artifact(path)
+    if model_type == "tagnn":
+        from recsys.models.tagnn import TAGNNRecommender
+
+        return TAGNNRecommender.load(path)
+    if model_type == "ggnn":
+        from recsys.models.ggnn import GGNNRecommender
+
+        return GGNNRecommender.load(path)
+    if model_type == "srgnn":
+        from recsys.models.srgnn import SRGNNRecommender
+
+        return SRGNNRecommender.load(path)
+    raise ValueError(
+        f"Unsupported model_type {model_type!r} in model metadata. "
+        "Expected one of: 'srgnn', 'tagnn', 'ggnn'."
+    )
+
+
+def _model_type_from_artifact(path: Path) -> str:
+    artifact_dir = path if path.is_dir() else path.parent
+    meta_path = artifact_dir / "model.json"
+    if not meta_path.exists():
+        return "srgnn"
+    metadata = json.loads(meta_path.read_text(encoding="utf-8"))
+    model_type = str(metadata.get("model_type", "srgnn")).strip().lower()
+    return model_type or "srgnn"
