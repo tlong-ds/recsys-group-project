@@ -38,6 +38,9 @@ dev = [
     "bandit>=1.7",
     "pip-audit>=2.7",
 ]
+monitoring = [
+    "evidently>=0.6",
+]
 
 [project.scripts]
 recsys-train = "recsys.training.pipeline:main"

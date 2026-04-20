@@ -464,6 +464,71 @@ stages:
       - metrics/data_version_comparison.json:
           cache: false
 
+  drift_baseline:
+    cmd: >
+      python -m recsys.monitoring.drift
+      --reference data/versions/v1_strict_filter/interim/train_interactions.parquet
+      --current data/versions/v1_strict_filter/interim/train_interactions.parquet
+      --vocab data/versions/v1_strict_filter/processed/item_vocab.json
+      --output metrics/monitoring/drift_baseline.json
+      --html reports/monitoring/evidently_baseline.html
+    deps:
+      - src/recsys/monitoring/features.py
+      - src/recsys/monitoring/drift.py
+      - src/recsys/monitoring/evidently_report.py
+      - data/versions/v1_strict_filter/interim/train_interactions.parquet
+      - data/versions/v1_strict_filter/processed/item_vocab.json
+    metrics:
+      - metrics/monitoring/drift_baseline.json:
+          cache: false
+    outs:
+      - reports/monitoring/evidently_baseline.html:
+          cache: false
+
+  drift_v1_vs_v2:
+    cmd: >
+      python -m recsys.monitoring.drift
+      --reference data/versions/v1_strict_filter/interim/train_interactions.parquet
+      --current data/versions/v2_sliding_window/interim/test_interactions.parquet
+      --vocab data/versions/v1_strict_filter/processed/item_vocab.json
+      --output metrics/monitoring/drift_v1_vs_v2.json
+      --html reports/monitoring/evidently_v1_vs_v2.html
+    deps:
+      - src/recsys/monitoring/features.py
+      - src/recsys/monitoring/drift.py
+      - src/recsys/monitoring/evidently_report.py
+      - data/versions/v1_strict_filter/interim/train_interactions.parquet
+      - data/versions/v2_sliding_window/interim/test_interactions.parquet
+      - data/versions/v1_strict_filter/processed/item_vocab.json
+    metrics:
+      - metrics/monitoring/drift_v1_vs_v2.json:
+          cache: false
+    outs:
+      - reports/monitoring/evidently_v1_vs_v2.html:
+          cache: false
+
+  drift_synthetic_oov:
+    cmd: >
+      python -m recsys.monitoring.drift
+      --reference data/versions/v1_strict_filter/interim/train_interactions.parquet
+      --current data/versions/v1_strict_filter/interim/train_interactions.parquet
+      --vocab data/versions/v1_strict_filter/processed/item_vocab.json
+      --inject-oov-rate 0.30
+      --output metrics/monitoring/drift_synthetic_oov.json
+      --html reports/monitoring/evidently_synthetic_oov.html
+    deps:
+      - src/recsys/monitoring/features.py
+      - src/recsys/monitoring/drift.py
+      - src/recsys/monitoring/evidently_report.py
+      - data/versions/v1_strict_filter/interim/train_interactions.parquet
+      - data/versions/v1_strict_filter/processed/item_vocab.json
+    metrics:
+      - metrics/monitoring/drift_synthetic_oov.json:
+          cache: false
+    outs:
+      - reports/monitoring/evidently_synthetic_oov.html:
+          cache: false
+
   train_matrix:
     matrix:
       data_version:
