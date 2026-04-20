@@ -451,7 +451,7 @@ stages:
           cache: false
 
   compare_data_versions:
-    cmd: python -m recsys.training.compare_versions --spec v1_strict_filter,metrics/v1_strict_filter/training_metrics.json,metrics/v1_strict_filter/evaluation_metrics.json --spec v2_sliding_window,metrics/v2_sliding_window/training_metrics.json,metrics/v2_sliding_window/evaluation_metrics.json --spec v3_train_plus_val,metrics/v3_train_plus_val/training_metrics.json,metrics/v3_train_plus_val/evaluation_metrics.json --output metrics/data_version_comparison.json
+    cmd: python -m recsys.training.compare_versions --spec v1_strict_filter,metrics/v1_strict_filter/training_metrics.json,metrics/v1_strict_filter/evaluation_metrics.json --spec v2_sliding_window,metrics/v2_sliding_window/training_metrics.json,metrics/v2_sliding_window/evaluation_metrics.json --spec v3_train_plus_val,metrics/v3_train_plus_val/training_metrics.json,metrics/v3_train_plus_val/evaluation_metrics.json --drift-spec baseline,metrics/monitoring/drift_baseline.json --drift-spec v1_vs_v2,metrics/monitoring/drift_v1_vs_v2.json --drift-spec synthetic_oov,metrics/monitoring/drift_synthetic_oov.json --output metrics/data_version_comparison.json
     deps:
       - src/recsys/training/compare_versions.py
       - metrics/v1_strict_filter/training_metrics.json
@@ -460,6 +460,9 @@ stages:
       - metrics/v2_sliding_window/evaluation_metrics.json
       - metrics/v3_train_plus_val/training_metrics.json
       - metrics/v3_train_plus_val/evaluation_metrics.json
+      - metrics/monitoring/drift_baseline.json
+      - metrics/monitoring/drift_v1_vs_v2.json
+      - metrics/monitoring/drift_synthetic_oov.json
     metrics:
       - metrics/data_version_comparison.json:
           cache: false
@@ -534,7 +537,7 @@ stages:
       data_version:
         - v1_strict_filter
         - v2_sliding_window
-        - v3_train_plus_val
+        # - v3_train_plus_val
       model_profile:
         - srgnn
         - srgnn_fc
@@ -694,7 +697,7 @@ stages:
       data_version:
         - v1_strict_filter
         - v2_sliding_window
-        - v3_train_plus_val
+        # - v3_train_plus_val
       model_profile:
         - srgnn
         - srgnn_fc
