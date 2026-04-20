@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: recsys-api-ingress
+  namespace: recsys
+spec:
+  podSelector:
+    matchLabels:
+      app: recsys-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: recsys
+        - podSelector:
+            matchLabels:
+              app: prometheus
+        - podSelector:
+            matchLabels:
+              app: recsys-api-client
+      ports:
+        - protocol: TCP
+          port: 8000

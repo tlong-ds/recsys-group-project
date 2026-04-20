@@ -2,5 +2,32 @@ serving:
   host: 0.0.0.0
   port: 8000
   reload: false
-  model_path: models/trained/latest/model.json
+  model_path: models/trained/latest/
+  preload_model_on_startup: true
   default_top_k: 10
+  security:
+    enabled: true
+    api_keys_env_var: RECSYS_API_KEYS
+    public_paths:
+      - /health
+    rate_limit_per_minute: 120
+    max_body_bytes: 65536
+    docs_enabled: false
+  model_registry:
+    enabled: false
+    model_name: recsys-srgnn
+    model_alias: Production
+    model_version: ""
+    artifact_path: registered_model
+    local_cache_dir: .cache/recsys_registry
+    fallback_to_filesystem: true
+
+mlflow:
+  enabled: true
+  tracking_uri: ""
+  experiment_name: recsys_srgnn
+  dagshub:
+    enabled: true
+    token_env_var: DAGSHUB_USER_TOKEN
+    repo_owner: lytlong.pers
+    repo_name: recsys-group-project

@@ -1,0 +1,13 @@
+model:
+  type: srgnn
+  variant: srgnn-avg
+  device: auto
+  name: srgnn-avg
+  version: "0.1.0"
+  embedding_dim: 128
+  hidden_size: 128
+  step: 1
+  max_session_length: 20
+  fallback_weight: 0.05
+  score_chunk_size: 512
+  train_batch_size: 512

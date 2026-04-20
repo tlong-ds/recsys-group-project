@@ -1,0 +1,10 @@
+{
+  "artifact_path": "/private/var/folders/zg/_wfh70cn569_5p6d24bj1_tr0000gn/T/pytest-of-bunnypro/pytest-26/test_multiple_propagation_step0/models/srgnn-step3/20260420T090658Z/model.pt",
+  "validation_metrics": {
+    "hr@k": 1.0,
+    "mrr@k": 0.5
+  },
+  "mlflow_run_id": null,
+  "data_version": "default",
+  "data_params_path": null
+}

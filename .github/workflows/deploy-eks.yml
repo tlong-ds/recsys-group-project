@@ -1,0 +1,105 @@
+name: deploy-eks
+
+on:
+  workflow_run:
+    workflows: ["publish-image"]
+    types: [completed]
+    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      apply_terraform:
+        description: "Run terraform apply before deploying manifests"
+        type: boolean
+        required: false
+        default: false
+      image_tag:
+        description: "Container image tag to deploy"
+        required: false
+        default: "main"
+
+permissions:
+  id-token: write
+  contents: read
+  packages: read
+
+concurrency:
+  group: deploy-eks-main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+      DEPLOY_IMAGE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || 'main' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.apply_terraform }}
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform apply
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.apply_terraform }}
+        run: |
+          terraform -chdir=deployment/terraform init -input=false
+          terraform -chdir=deployment/terraform plan -input=false -out=tfplan
+          terraform -chdir=deployment/terraform apply -input=false -auto-approve tfplan
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.30.0
+
+      - name: Configure kubeconfig
+        run: aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+
+      - name: Ensure namespace
+        run: kubectl create namespace recsys --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create GHCR pull secret
+        run: |
+          kubectl -n recsys create secret docker-registry ghcr-pull-secret \
+            --docker-server=ghcr.io \
+            --docker-username="${{ secrets.GHCR_USERNAME }}" \
+            --docker-password="${{ secrets.GHCR_TOKEN }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create app secrets
+        run: |
+          kubectl -n recsys create secret generic recsys-secrets \
+            --from-literal=api-keys='${{ secrets.RECSYS_API_KEYS }}' \
+            --from-literal=dagshub-user-token='${{ secrets.DAGSHUB_USER_TOKEN }}' \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create monitoring secrets
+        run: |
+          kubectl -n recsys create secret generic recsys-monitoring-secrets \
+            --from-literal=recsys-api-key='${{ secrets.RECSYS_METRICS_API_KEY }}' \
+            --from-literal=grafana-admin-password='${{ secrets.GRAFANA_ADMIN_PASSWORD }}' \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy manifests
+        run: |
+          cd deployment/kubernetes
+          kustomize edit set image ghcr.io/tlong-ds/recsys-group-project=ghcr.io/${{ github.repository }}:${DEPLOY_IMAGE_TAG}
+          kubectl apply -k .
+
+      - name: Wait for rollouts
+        run: |
+          kubectl -n recsys rollout status deployment/recsys-api --timeout=5m
+          kubectl -n recsys rollout status deployment/prometheus --timeout=5m
+          kubectl -n recsys rollout status deployment/grafana --timeout=5m
+

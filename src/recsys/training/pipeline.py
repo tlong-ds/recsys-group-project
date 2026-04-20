@@ -1,117 +1,613 @@
-"""End-to-end training pipeline for session-based recommendation."""
+"""Training pipeline – supports SR-GNN variants, TAGNN, and GGNN."""
 
 from __future__ import annotations
 
 import argparse
+import json
+import random
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
-from recsys.data import DataLoader, DataValidator, DatasetBuilder, SessionPreprocessor
+import numpy as np
+import pandas as pd
+import torch
+
 from recsys.evaluation import Evaluator
-from recsys.features import SessionFeatureBuilder
-from recsys.models import SRGNNRecommender
+from recsys.models.ggnn import GGNNRecommender
+from recsys.models.graph_helpers import GraphRecommenderBase
+from recsys.models.srgnn import VARIANT_SRGNN, SRGNNRecommender
+from recsys.models.tagnn import TAGNNRecommender
+from recsys.training.mlflow_registry import register_model_version
+from recsys.training.registry import ModelRegistry
+from recsys.training.tracking import (
+    configure_system_metrics,
+    configure_tracking,
+    log_evaluation_run,
+    sanitize_metric_key,
+    system_metrics_run_override,
+    tracking_enabled,
+)
 from recsys.training.trainer import Trainer
-from recsys.utils.config import load_config, merge_configs
+from recsys.utils.config import load_training_runtime_config
 from recsys.utils.logger import get_logger
 
+STAGE_ALL = "all"
+STAGE_TRAIN = "train"
+STAGE_EVALUATE = "evaluate"
+STAGE_NAMES = [STAGE_ALL, STAGE_TRAIN, STAGE_EVALUATE]
 
-def run_training_pipeline(config: dict[str, Any]) -> dict[str, Any]:
-    """Execute the training pipeline and return artifact path plus metrics."""
+# Supported model type strings
+MODEL_TYPE_SRGNN = "srgnn"
+MODEL_TYPE_TAGNN = "tagnn"
+MODEL_TYPE_GGNN = "ggnn"
+
+
+# ---------------------------------------------------------------------------
+# Model factory
+# ---------------------------------------------------------------------------
+
+
+def build_model(model_config: dict[str, Any], seed: int) -> GraphRecommenderBase:
+    """Instantiate the correct model class from ``model_config``.
+
+    The ``type`` key selects the architecture; ``variant`` is passed through
+    for SR-GNN only (ignored for TAGNN / GGNN).
+
+    Parameters
+    ----------
+    model_config:
+        Contents of ``config["model"]``.
+    seed:
+        Global random seed forwarded to the model.
+    """
+    model_type = str(model_config.get("type", MODEL_TYPE_SRGNN)).lower()
+
+    common_kwargs: dict[str, Any] = dict(
+        embedding_dim=int(model_config.get("embedding_dim", 128)),
+        hidden_size=int(model_config.get("hidden_size", 128)),
+        step=int(model_config.get("step", 1)),
+        max_session_length=int(model_config.get("max_session_length", 20)),
+        fallback_weight=float(model_config.get("fallback_weight", 0.0)),
+        model_version=str(model_config.get("version", "0.1.0")),
+        seed=seed,
+        device=model_config.get("device"),
+    )
+
+    # model_name defaults: explicit > variant (srgnn) > type
+    explicit_name = model_config.get("name")
+
+    if model_type == MODEL_TYPE_TAGNN:
+        from recsys.models.tagnn import DEFAULT_SCORE_CHUNK
+
+        common_kwargs["model_name"] = explicit_name or "tagnn"
+        common_kwargs["score_chunk_size"] = int(
+            model_config.get("score_chunk_size", DEFAULT_SCORE_CHUNK)
+        )
+        return TAGNNRecommender(**common_kwargs)
+
+    if model_type == MODEL_TYPE_GGNN:
+        common_kwargs["model_name"] = explicit_name or "ggnn"
+        return GGNNRecommender(**common_kwargs)
+
+    if model_type not in (MODEL_TYPE_SRGNN, MODEL_TYPE_TAGNN, MODEL_TYPE_GGNN):
+        raise ValueError(
+            f"Unknown model type '{model_type}'. "
+            "Choose one of: "
+            f"{MODEL_TYPE_SRGNN!r}, {MODEL_TYPE_TAGNN!r}, {MODEL_TYPE_GGNN!r}"
+        )
+
+    # Default: SR-GNN
+    variant = str(model_config.get("variant", VARIANT_SRGNN))
+    common_kwargs["variant"] = variant
+    common_kwargs["model_name"] = explicit_name or variant
+    return SRGNNRecommender(**common_kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Stages
+# ---------------------------------------------------------------------------
+
+
+def run_train_stage(config: dict[str, Any]) -> dict[str, Any]:
+    """Train and register a model artefact from processed train/val examples."""
     logger = get_logger()
     data_config = config.get("data", {})
     model_config = config.get("model", {})
     training_config = config.get("training", {})
 
-    column_config = data_config.get("columns", {})
-    session_col = column_config.get("session_id", "session_id")
-    item_col = column_config.get("item_id", "item_id")
-    timestamp_col = column_config.get("timestamp", "timestamp")
+    seed = int(training_config.get("seed", 42))
+    _set_seed(seed)
 
-    loader = DataLoader(
-        raw_path=data_config.get("raw_path", "data/raw"),
-        interactions_file=data_config.get("interactions_file", "interactions.csv"),
-        items_file=data_config.get("items_file", "items.csv"),
-        users_file=data_config.get("users_file", "users.csv"),
-    )
-    validator = DataValidator(
-        session_col=session_col,
-        item_col=item_col,
-        timestamp_col=timestamp_col,
-    )
-    preprocessor = SessionPreprocessor(
-        session_col=session_col,
-        item_col=item_col,
-        timestamp_col=timestamp_col,
-    )
-    dataset_builder = DatasetBuilder(timestamp_col=timestamp_col)
-    feature_builder = SessionFeatureBuilder(
-        session_col=session_col,
-        item_col=item_col,
-        max_session_length=int(model_config.get("max_session_length", 20)),
-    )
+    train_df = _load_split_examples(data_config, "train")
+    val_df = _load_split_examples(data_config, "val")
+    item_vocab = _load_item_vocab(_resolve_item_vocab_path(data_config))
 
-    interactions = loader.load_interactions()
-    validator.validate_interactions(interactions)
-    cleaned = preprocessor.transform(interactions)
-    _persist_intermediate(cleaned, data_config)
+    if "device" not in model_config and training_config.get("device") is not None:
+        model_config = {**model_config, "device": training_config.get("device")}
+    model = build_model(model_config, seed)
 
-    split = dataset_builder.build_splits(
-        cleaned,
-        val_ratio=float(training_config.get("val_ratio", 0.1)),
-        test_ratio=float(training_config.get("test_ratio", 0.1)),
-    )
-    train_examples = feature_builder.build_examples(split.train)
-    val_examples = feature_builder.build_examples(split.validation)
-    test_examples = feature_builder.build_examples(split.test)
-    _persist_processed(train_examples, val_examples, test_examples, data_config)
-
-    model = SRGNNRecommender(
-        embedding_dim=int(model_config.get("embedding_dim", 128)),
-        hidden_size=int(model_config.get("hidden_size", 128)),
-        max_session_length=int(model_config.get("max_session_length", 20)),
-        fallback_weight=float(model_config.get("fallback_weight", 0.15)),
-        model_name=str(model_config.get("name", "srgnn")),
-        model_version=str(model_config.get("version", "0.1.0")),
-    )
     trainer = Trainer(config=config)
-    training_result = trainer.train(model, train_examples, val_examples)
+    mlflow_context = (
+        _mlflow_run_context(config) if tracking_enabled(config) else nullcontext()
+    )
+    registry_info: dict[str, Any] | None = None
 
-    evaluator = Evaluator(top_k=int(training_config.get("top_k", 20)))
-    test_metrics = evaluator.evaluate(training_result.model, test_examples)
-    logger.info("Offline test metrics: {}", test_metrics)
+    with mlflow_context as active_run:
+        if active_run is not None:
+            _log_config_to_mlflow(config)
 
-    return {
+        training_result = trainer.train(model, train_df, val_df, item_vocab=item_vocab)
+
+        logger.info("offline validation metrics: {}", training_result.metrics)
+
+        if active_run is not None:
+            mlflow = _get_mlflow()
+            mlflow.log_metrics(
+                {
+                    f"val_{sanitize_metric_key(k)}": float(v)
+                    for k, v in training_result.metrics.items()
+                }
+            )
+            mlflow.log_artifacts(
+                str(training_result.artifact_path.parent),
+                artifact_path="registered_model",
+            )
+            if training_result.model._core is not None:
+                input_example = _mlflow_pt2_input_example(
+                    training_result.model,
+                    train_df,
+                )
+                output_example = _mlflow_pt2_output_example(
+                    training_result.model,
+                    input_example,
+                )
+                mlflow.pytorch.log_model(
+                    training_result.model._core,
+                    name="model_core",
+                    serialization_format="pt2",
+                    input_example=input_example,
+                    signature=_mlflow_pt2_signature(input_example, output_example),
+                )
+                registry_info = register_model_version(
+                    config=config,
+                    run_id=active_run.info.run_id,
+                    source_artifact_path="model_core",
+                )
+
+        metrics_path = _metrics_path(
+            training_config, "train_metrics_path", "metrics/training_metrics.json"
+        )
+        lineage = _lineage_metadata(config)
+        payload: dict[str, Any] = {
+            "artifact_path": str(training_result.artifact_path),
+            "validation_metrics": training_result.metrics,
+            "mlflow_run_id": active_run.info.run_id if active_run is not None else None,
+            **lineage,
+        }
+        if registry_info is not None:
+            payload["model_registry"] = registry_info
+        _write_json(payload, metrics_path)
+
+    outputs: dict[str, Any] = {
         "artifact_path": str(training_result.artifact_path),
         "validation_metrics": training_result.metrics,
+        "training_metrics": str(metrics_path),
+        **lineage,
+    }
+    if registry_info is not None:
+        outputs["model_registry"] = registry_info
+    return outputs
+
+
+def run_evaluate_stage(config: dict[str, Any]) -> dict[str, Any]:
+    """Evaluate the latest registered model on test examples."""
+    logger = get_logger()
+    data_cfg = config.get("data", {})
+    training_cfg = config.get("training", {})
+    model_config = config.get("model", {})
+    registry_root = (
+        config.get("registry", {}).get("root_path")
+        or training_cfg.get("registry_path")
+        or "models/trained"
+    )
+
+    model_path = ModelRegistry(root_path=registry_root).latest_model_path()
+    model_type = str(model_config.get("type", MODEL_TYPE_SRGNN)).lower()
+    runtime_device = model_config.get("device") or training_cfg.get("device")
+    model = _load_model_by_type(model_type, model_path, runtime_device)
+    test_examples = _load_split_examples(data_cfg, "test")
+
+    evaluator = Evaluator(top_k=int(training_cfg.get("top_k", 20)))
+    test_metrics = evaluator.evaluate(model, test_examples)
+    logger.info("offline test metrics: {}", test_metrics)
+    log_evaluation_run(config=config, metrics=test_metrics, model_path=model_path)
+
+    metrics_path = _metrics_path(
+        training_cfg, "evaluation_metrics_path", "metrics/evaluation_metrics.json"
+    )
+    lineage = _lineage_metadata(config)
+    _write_json(
+        {"model_path": str(model_path), "test_metrics": test_metrics, **lineage},
+        metrics_path,
+    )
+
+    return {
+        "model_path": str(model_path),
         "test_metrics": test_metrics,
+        "evaluation_metrics": str(metrics_path),
+        **lineage,
     }
 
 
+def run_training_pipeline(config: dict[str, Any]) -> dict[str, Any]:
+    """Run the full train + evaluate workflow."""
+    outputs = run_train_stage(config)
+    outputs.update(run_evaluate_stage(config))
+    return outputs
+
+
+# ---------------------------------------------------------------------------
+# Model loading helper (selects correct load() classmethod by type)
+# ---------------------------------------------------------------------------
+
+
+def _load_model_by_type(
+    model_type: str, model_path: Path, device: str | None = None
+) -> GraphRecommenderBase:
+    if model_type == MODEL_TYPE_TAGNN:
+        return TAGNNRecommender.load(model_path, device=device)
+    if model_type == MODEL_TYPE_GGNN:
+        return GGNNRecommender.load(model_path, device=device)
+    return SRGNNRecommender.load(model_path, device=device)
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train the SR-GNN recommender")
+    parser = argparse.ArgumentParser(description="Run graph recommender training")
     parser.add_argument("--data-config", default="configs/data_config.yaml")
     parser.add_argument("--model-config", default="configs/model_config.yaml")
     parser.add_argument("--training-config", default="configs/training_config.yaml")
+    parser.add_argument("--params", default="params.yaml")
+    parser.add_argument(
+        "--data-params",
+        default=None,
+        help="Optional data-only overlay for versioned train/eval inputs.",
+    )
+    parser.add_argument("--stage", default=STAGE_ALL, choices=STAGE_NAMES)
+    parser.add_argument(
+        "--registry-root",
+        default=None,
+        help="Override the model registry root for this run.",
+    )
+    parser.add_argument(
+        "--train-metrics-path",
+        default=None,
+        help="Override the training metrics output path for this run.",
+    )
+    parser.add_argument(
+        "--evaluation-metrics-path",
+        default=None,
+        help="Override the evaluation metrics output path for this run.",
+    )
+    parser.add_argument(
+        "--dvc-mode",
+        action="store_true",
+        help="Disable versioned registry dirs for deterministic DVC outputs.",
+    )
+    parser.add_argument(
+        "--device",
+        default=None,
+        help="Execution device override (auto, cpu, mps, cuda, cuda:N).",
+    )
     args = parser.parse_args()
 
-    config = merge_configs(
-        load_config(args.data_config),
-        load_config(args.model_config),
-        load_config(args.training_config),
+    config = load_training_runtime_config(
+        data_config_path=args.data_config,
+        model_config_path=args.model_config,
+        training_config_path=args.training_config,
+        params_path=args.params,
+        data_params_path=args.data_params,
     )
-    result = run_training_pipeline(config)
+    _apply_runtime_overrides(config, args)
+    _attach_lineage_metadata(config, args)
+    if args.dvc_mode:
+        config.setdefault("training", {})["dvc_mode"] = True
+    if args.registry_root:
+        config.setdefault("registry", {})["root_path"] = str(args.registry_root)
+    if args.train_metrics_path:
+        config.setdefault("training", {})["train_metrics_path"] = str(
+            args.train_metrics_path
+        )
+    if args.evaluation_metrics_path:
+        config.setdefault("training", {})["evaluation_metrics_path"] = str(
+            args.evaluation_metrics_path
+        )
+    if args.device:
+        config.setdefault("training", {})["device"] = str(args.device)
+
+    if args.stage == STAGE_ALL:
+        result = run_training_pipeline(config)
+    elif args.stage == STAGE_TRAIN:
+        result = run_train_stage(config)
+    elif args.stage == STAGE_EVALUATE:
+        result = run_evaluate_stage(config)
+    else:
+        raise ValueError(f"Unsupported stage '{args.stage}'")
     print(result)
 
 
-def _persist_intermediate(interactions, data_config: dict[str, Any]) -> None:
-    interim_path = Path(data_config.get("interim_path", "data/interim"))
-    interim_path.mkdir(parents=True, exist_ok=True)
-    interactions.to_csv(interim_path / "clean_interactions.csv", index=False)
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
 
 
-def _persist_processed(train_examples, val_examples, test_examples, data_config: dict[str, Any]) -> None:
-    processed_path = Path(data_config.get("processed_path", "data/processed"))
-    processed_path.mkdir(parents=True, exist_ok=True)
-    train_examples.to_json(processed_path / "train_examples.jsonl", orient="records", lines=True)
-    val_examples.to_json(processed_path / "val_examples.jsonl", orient="records", lines=True)
-    test_examples.to_json(processed_path / "test_examples.jsonl", orient="records", lines=True)
+def _load_split_examples(data_config: dict[str, Any], split: str) -> pd.DataFrame:
+    return _load_examples(_resolve_split_path(data_config, split))
+
+
+def _resolve_split_path(data_config: dict[str, Any], split: str) -> Path:
+    explicit = data_config.get(f"{split}_examples_path")
+    if explicit:
+        return Path(str(explicit))
+    processed_dir = Path(str(data_config.get("processed_path", "data/processed")))
+    return processed_dir / f"{split}_examples.parquet"
+
+
+def _resolve_item_vocab_path(data_config: dict[str, Any]) -> Path:
+    explicit = data_config.get("item_vocab_path")
+    if explicit:
+        return Path(str(explicit))
+    processed_dir = Path(str(data_config.get("processed_path", "data/processed")))
+    return processed_dir / "item_vocab.json"
+
+
+def _load_examples(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        raise FileNotFoundError(f"Processed examples not found: {path}")
+    if path.suffix == ".parquet":
+        return pd.read_parquet(path)
+    if path.suffix == ".csv":
+        return pd.read_csv(path)
+    raise ValueError(f"Unsupported training example format: {path.suffix}")
+
+
+def _load_item_vocab(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        raise FileNotFoundError(f"Item vocab not found: {path}")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _set_seed(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
+def _mlflow_run_context(config: dict[str, Any]):
+    configure_tracking(config)
+    configure_system_metrics(config)
+    mlflow = _get_mlflow()
+    mlflow_cfg = config.get("mlflow", {})
+    run_kwargs: dict[str, Any] = {"run_name": mlflow_cfg.get("run_name")}
+    lsm = system_metrics_run_override(config)
+    if lsm is not None:
+        run_kwargs["log_system_metrics"] = lsm
+    return mlflow.start_run(**run_kwargs)
+
+
+def _log_config_to_mlflow(config: dict[str, Any]) -> None:
+    mlflow = _get_mlflow()
+    for key, value in _flatten_dict(config).items():
+        mlflow.log_param(key, value)
+
+
+def _flatten_dict(data: dict[str, Any], prefix: str = "") -> dict[str, str]:
+    flat: dict[str, str] = {}
+    for key, value in data.items():
+        full_key = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            flat.update(_flatten_dict(value, full_key))
+        else:
+            flat[full_key] = str(value)
+    return flat
+
+
+def _metrics_path(training_cfg: dict[str, Any], key: str, default: str) -> Path:
+    return Path(str(training_cfg.get(key, default)))
+
+
+def _mlflow_pt2_input_example(
+    model: GraphRecommenderBase,
+    train_df: pd.DataFrame,
+) -> tuple[torch.Tensor, ...]:
+    if train_df.empty:
+        raise ValueError(
+            "Cannot build MLflow pt2 input example from an empty train_df."
+        )
+    row = train_df.iloc[0]
+    tensors = model._tensors_from_graph(row.x, row.edge_index, row.alias_inputs)
+    return tuple(tensors)
+
+
+def _mlflow_pt2_output_example(
+    model: GraphRecommenderBase,
+    input_example: tuple[torch.Tensor, ...],
+) -> tuple[torch.Tensor, ...]:
+    if model._core is None:
+        raise ValueError("Cannot build MLflow pt2 output example without model core.")
+
+    core = model._core
+    was_training = core.training
+    core.eval()
+    with torch.no_grad():
+        outputs = core(*input_example)
+    if was_training:
+        core.train()
+    return _ensure_tensor_tuple(outputs, value_name="MLflow model output")
+
+
+def _mlflow_pt2_signature(
+    input_example: tuple[torch.Tensor, ...],
+    output_example: tuple[torch.Tensor, ...],
+):
+    from mlflow.models.signature import ModelSignature
+    from mlflow.types.schema import Schema, TensorSpec
+
+    return ModelSignature(
+        inputs=Schema(_tensor_specs(input_example, "input", TensorSpec)),
+        outputs=Schema(_tensor_specs(output_example, "output", TensorSpec)),
+    )
+
+
+def _tensor_specs(
+    examples: tuple[torch.Tensor, ...],
+    prefix: str,
+    tensor_spec_cls: Any,
+) -> list[Any]:
+    return [
+        tensor_spec_cls(
+            type=_tensor_numpy_dtype(tensor),
+            shape=tuple(tensor.shape),
+            name=f"{prefix}_{index}",
+        )
+        for index, tensor in enumerate(examples)
+    ]
+
+
+def _ensure_tensor_tuple(values: Any, value_name: str) -> tuple[torch.Tensor, ...]:
+    if isinstance(values, torch.Tensor):
+        return (values,)
+    if (
+        isinstance(values, (tuple, list))
+        and values
+        and all(isinstance(value, torch.Tensor) for value in values)
+    ):
+        return tuple(values)
+    raise ValueError(f"{value_name} must be a torch.Tensor or a tuple/list of tensors.")
+
+
+def _tensor_numpy_dtype(tensor: torch.Tensor) -> np.dtype:
+    dtype_map: dict[torch.dtype, np.dtype] = {
+        torch.float16: np.dtype(np.float16),
+        torch.float32: np.dtype(np.float32),
+        torch.float64: np.dtype(np.float64),
+        torch.int8: np.dtype(np.int8),
+        torch.int16: np.dtype(np.int16),
+        torch.int32: np.dtype(np.int32),
+        torch.int64: np.dtype(np.int64),
+        torch.uint8: np.dtype(np.uint8),
+        torch.bool: np.dtype(np.bool_),
+    }
+    if tensor.dtype not in dtype_map:
+        raise ValueError(
+            f"Unsupported tensor dtype for MLflow signature: {tensor.dtype}"
+        )
+    return dtype_map[tensor.dtype]
+
+
+def _apply_runtime_overrides(config: dict[str, Any], args: argparse.Namespace) -> None:
+    if args.registry_root:
+        config.setdefault("registry", {})["root_path"] = args.registry_root
+    if args.train_metrics_path:
+        config.setdefault("training", {})["train_metrics_path"] = (
+            args.train_metrics_path
+        )
+    if args.evaluation_metrics_path:
+        config.setdefault("training", {})["evaluation_metrics_path"] = (
+            args.evaluation_metrics_path
+        )
+    if args.device:
+        config.setdefault("training", {})["device"] = args.device
+
+
+def _attach_lineage_metadata(config: dict[str, Any], args: argparse.Namespace) -> None:
+    lineage = config.setdefault("lineage", {})
+    data_params_path = args.data_params
+    lineage["data_params_path"] = str(data_params_path) if data_params_path else None
+    lineage["data_version"] = _infer_data_version(config, args.data_params)
+
+
+def _lineage_metadata(config: dict[str, Any]) -> dict[str, Any]:
+    lineage_cfg = config.get("lineage", {})
+    if not isinstance(lineage_cfg, dict):
+        lineage_cfg = {}
+
+    data_params_path = _string_or_none(lineage_cfg.get("data_params_path"))
+    return {
+        "data_version": _infer_data_version(config, data_params_path),
+        "data_params_path": data_params_path,
+    }
+
+
+def _infer_data_version(
+    config: dict[str, Any],
+    data_params_path: str | Path | None = None,
+) -> str:
+    lineage_cfg = config.get("lineage", {})
+    if isinstance(lineage_cfg, dict):
+        explicit = _string_or_none(lineage_cfg.get("data_version"))
+        if explicit:
+            return explicit
+
+    candidates: list[str | Path | None] = [data_params_path]
+    data_cfg = config.get("data", {})
+    if isinstance(data_cfg, dict):
+        candidates.extend(
+            [
+                data_cfg.get("processed_path"),
+                data_cfg.get("train_examples_path"),
+                data_cfg.get("test_examples_path"),
+            ]
+        )
+
+    for candidate in candidates:
+        slug = _extract_version_slug(candidate)
+        if slug:
+            return slug
+    return "default"
+
+
+def _extract_version_slug(candidate: str | Path | None) -> str | None:
+    if not candidate:
+        return None
+    path = Path(str(candidate))
+    parts = list(path.parts)
+
+    if "data_versions" in parts:
+        return path.stem
+
+    if "versions" in parts:
+        idx = parts.index("versions")
+        if idx + 1 < len(parts):
+            return parts[idx + 1]
+
+    return None
+
+
+def _string_or_none(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
+    return str(value)
+
+
+def _write_json(payload: dict[str, Any], destination: Path) -> Path:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return destination
+
+
+def _get_mlflow():
+    import mlflow
+
+    return mlflow
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,8 @@
+{
+    "n_interactions": 1235380,
+    "n_sessions": 310324,
+    "n_items": 122993,
+    "event_type_counts": {
+        "view": 1235380
+    }
+}

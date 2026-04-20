@@ -35,6 +35,7 @@ MANIFEST
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
+requirements-mlflow.txt
 
 # Unit test / coverage reports
 htmlcov/
@@ -60,6 +61,7 @@ cover/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+mlflow.db
 
 # Flask stuff:
 instance/
@@ -143,7 +145,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-
+recsys-env/
+mlflow-env/
 # Spyder project settings
 .spyderproject
 .spyproject
@@ -205,3 +208,17 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+__main__
+
+#png
+tagnn.png
+srgnn.png
+*.ingest
+mlflow_fresh.db
+
+# DVC-generated training artifacts (local workspace only)
+models/experiments/
+metrics/experiments/
+models/trained/*/latest/
+models/trained/*/[0-9]*T[0-9]*Z/

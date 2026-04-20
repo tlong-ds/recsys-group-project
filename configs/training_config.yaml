@@ -1,11 +1,19 @@
 training:
   seed: 42
-  test_ratio: 0.1
-  val_ratio: 0.1
-  batch_size: 256
-  num_epochs: 10
-  early_stopping_patience: 5
+  device: auto
+  batch_size: 512
+  num_workers: 4
+  pin_memory: true
+  persistent_workers: true
+  prefetch_factor: 2
+  num_epochs: 5
+  lr: 1.0e-3
+  weight_decay: 1.0e-5
+  early_stopping_patience: 2
+  early_stopping_min_delta: 1.0e-4
   top_k: 20
+  train_metrics_path: metrics/training_metrics.json
+  evaluation_metrics_path: metrics/evaluation_metrics.json
 
 logging:
   level: INFO
@@ -13,7 +21,25 @@ logging:
 
 registry:
   root_path: models/trained
+  create_versioned: true
 
 mlflow:
-  tracking_uri: http://mlflow:5000
+  enabled: true
+  tracking_uri: ""
   experiment_name: recsys_srgnn
+  run_name: srgnn-parquet-training
+  system_metrics:
+    enabled: true
+    sampling_interval: 1
+    samples_before_logging: 1
+  registry:
+    enabled: true
+    model_name_template: recsys-{model_name}-data-{data_version_short}
+    register_alias: Staging
+  dagshub:
+    enabled: true
+    token_env_var: DAGSHUB_USER_TOKEN
+    username_env_var: DAGSHUB_USERNAME
+    password_env_var: DAGSHUB_USER_TOKEN
+    repo_owner: lytlong.pers
+    repo_name: recsys-group-project

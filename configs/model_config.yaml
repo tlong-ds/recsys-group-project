@@ -1,7 +1,89 @@
+# ── Active experiment ────────────────────────────────────────────────────────
 model:
-  name: srgnn
+  type:    srgnn          # architecture family
+  variant: srgnn          # SR-GNN readout variant (ignored for tagnn / ggnn)
+  name:    srgnn          # artifact / mlflow registered model name
   version: "0.1.0"
-  embedding_dim: 128
-  hidden_size: 128
+
+  embedding_dim:      128
+  hidden_size:        128  # must equal embedding_dim
+  step:               1
   max_session_length: 20
-  fallback_weight: 0.15
+  fallback_weight:    0.05
+
+
+# ── Example configs for other experiments (uncomment to use) ─────────────────
+
+# SR-GNN-NGC
+# model:
+#   type:    srgnn
+#   variant: srgnn-ngc
+#   name:    srgnn-ngc
+#   version: "0.1.0"
+#   embedding_dim: 128
+#   hidden_size:   128
+#   step:          1
+#   max_session_length: 20
+#   fallback_weight: 0.0
+
+# SR-GNN-FC
+# model:
+#   type:    srgnn
+#   variant: srgnn-fc
+#   name:    srgnn-fc
+#   version: "0.1.0"
+#   embedding_dim: 128
+#   hidden_size:   128
+#   step:          1
+#   max_session_length: 20
+
+# SR-GNN-L  (local readout only)
+# model:
+#   type:    srgnn
+#   variant: srgnn-l
+#   name:    srgnn-l
+#   version: "0.1.0"
+#   embedding_dim: 128
+#   hidden_size:   128
+#   step:          1
+#   max_session_length: 20
+
+# SR-GNN-AVG
+# model:
+#   type:    srgnn
+#   variant: srgnn-avg
+#   name:    srgnn-avg
+#   version: "0.1.0"
+#   embedding_dim: 128
+#   step:          1
+#   max_session_length: 20
+
+# SR-GNN-ATT
+# model:
+#   type:    srgnn
+#   variant: srgnn-att
+#   name:    srgnn-att
+#   version: "0.1.0"
+#   embedding_dim: 128
+#   step:          1
+#   max_session_length: 20
+
+# TAGNN
+# model:
+#   type:    tagnn
+#   name:    tagnn
+#   version: "0.1.0"
+#   embedding_dim: 128
+#   hidden_size:   128
+#   step:          1
+#   max_session_length: 20
+
+# GGNN
+# model:
+#   type:    ggnn
+#   name:    ggnn
+#   version: "0.1.0"
+#   embedding_dim: 128
+#   hidden_size:   128
+#   step:          1
+#   max_session_length: 20
