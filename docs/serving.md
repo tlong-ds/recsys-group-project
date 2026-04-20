@@ -33,6 +33,15 @@ Key settings:
 - `security.max_body_bytes`: Maximum declared request body size.
 - `security.docs_enabled`: Expose or disable FastAPI docs/OpenAPI routes.
 
+Model path note:
+- The default path is `models/trained/latest/`.
+- Current checked-in versioned artifacts live under paths such as
+  `models/trained/v1_strict_filter/latest/`,
+  `models/trained/v2_sliding_window/latest/`, and
+  `models/trained/v3_train_plus_val/latest/`.
+- For local demos, point `serving.model_path` at the artifact you want to serve
+  or enable MLflow model registry loading.
+
 ## Endpoints
 - `GET /health`: Public liveness endpoint with sanitized model status.
 - `GET /ready`: Public readiness endpoint that returns `503` when the model is unavailable.
@@ -48,9 +57,9 @@ request outcome, prediction latency, input sequence length, requested `top_k`,
 and OOV item counts against the loaded model catalog. These online signals are
 separate from the offline benchmark replay drift reports in `recsys.monitoring`.
 
-For CT-driven deployments, keep `model_registry.model_alias` set to an alias
-managed by your CT workflow (for example `Production`) so serving follows model
-promotions without changing image tags.
+For CT-driven deployments, keep `model_registry.model_alias` set to the alias
+managed by the promotion process (for example `Production`) so serving follows
+model promotions without changing image tags.
 
 ## Running Locally
 To run the server locally, you can use the provided CLI entrypoint or Docker Compose:
@@ -58,6 +67,11 @@ To run the server locally, you can use the provided CLI entrypoint or Docker Com
 # Using Python
 export RECSYS_API_KEYS=local-dev-key
 python -m recsys.serving.api --config configs/serving_config.yaml
+
+# Serve an explicit versioned artifact
+python -m recsys.serving.api \
+  --config configs/serving_config.yaml \
+  --model-path models/trained/v1_strict_filter/latest/
 
 # Using Docker Compose
 export RECSYS_API_KEYS=local-dev-key

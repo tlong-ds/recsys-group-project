@@ -37,7 +37,7 @@ Response body:
 
 ## Authentication
 
-All endpoints except `/health` require an API key:
+All endpoints except `/health` and `/ready` require an API key:
 
 ```http
 Authorization: Bearer <api-key>
