@@ -11,6 +11,15 @@ class FakePredictor:
     ) -> list[int]:
         return list(range(100, 100 + top_k))
 
+    def input_quality(self, item_sequence: list[int]) -> dict[str, int | float]:
+        return {
+            "sequence_length": len(item_sequence),
+            "known_items": len(item_sequence),
+            "unknown_items": 0,
+            "oov_ratio": 0.0,
+            "known_catalog_items": 100,
+        }
+
 
 def _app(monkeypatch, *, rate_limit_per_minute: int = 120, max_body_bytes: int = 65536):
     monkeypatch.setenv("RECSYS_API_KEYS", "test-key,rotated-key")

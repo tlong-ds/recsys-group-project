@@ -8,3 +8,31 @@ groups:
           severity: warning
         annotations:
           summary: "RecSys API is unreachable"
+      - alert: RecSysModelNotReady
+        expr: recsys_model_ready == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RecSys model is not ready"
+      - alert: RecSysHighOovRatio
+        expr: rate(recsys_oov_items_total[5m]) / clamp_min(rate(recsys_input_items_total[5m]), 1e-9) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RecSys online OOV item ratio is high"
+      - alert: RecSysHighErrorRate
+        expr: sum(rate(recsys_recommendation_requests_total{status!="success"}[5m])) / clamp_min(sum(rate(recsys_recommendation_requests_total[5m])), 1e-9) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RecSys recommendation error rate is high"
+      - alert: RecSysHighPredictionLatency
+        expr: histogram_quantile(0.95, sum(rate(recsys_prediction_latency_seconds_bucket[5m])) by (le)) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RecSys recommendation p95 latency is high"

@@ -4,13 +4,20 @@ from __future__ import annotations
 
 import argparse
 import os
+import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Response
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from recsys.serving.predictor import Predictor
@@ -29,6 +36,43 @@ CONFIG_ENV_VAR = "RECSYS_SERVING_CONFIG"
 RECSYS_RECOMMENDATIONS_TOTAL = Counter(
     "recsys_recommendations_total", "Total number of recommendations served"
 )
+RECSYS_RECOMMENDATION_REQUESTS_TOTAL = Counter(
+    "recsys_recommendation_requests_total",
+    "Recommendation requests by outcome status",
+    ["status"],
+)
+RECSYS_OOV_ITEMS_TOTAL = Counter(
+    "recsys_oov_items_total",
+    "Total number of request items unknown to the loaded model catalog",
+)
+RECSYS_INPUT_ITEMS_TOTAL = Counter(
+    "recsys_input_items_total",
+    "Total number of input items received by the recommendation endpoint",
+)
+RECSYS_MODEL_LOAD_FAILURES_TOTAL = Counter(
+    "recsys_model_load_failures_total",
+    "Total number of failed model readiness/load checks",
+)
+RECSYS_PREDICTION_LATENCY_SECONDS = Histogram(
+    "recsys_prediction_latency_seconds",
+    "Latency of model recommendation calls",
+    buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0),
+)
+RECSYS_INPUT_SEQUENCE_LENGTH = Histogram(
+    "recsys_input_sequence_length",
+    "Length of item_sequence values received by the recommendation endpoint",
+    buckets=(1, 2, 3, 5, 10, 20, 50, 100),
+)
+RECSYS_REQUESTED_TOP_K = Histogram(
+    "recsys_requested_top_k",
+    "Requested top_k values received by the recommendation endpoint",
+    buckets=(1, 5, 10, 20, 50, 100),
+)
+RECSYS_MODEL_READY = Gauge(
+    "recsys_model_ready",
+    "Whether the serving process can load the configured model",
+)
+RECSYS_MODEL_READY.set(0)
 
 
 def create_app(
@@ -103,43 +147,83 @@ def create_app(
         try:
             get_predictor_bundle()
             app.state.model_preload_error = ""
+            RECSYS_MODEL_READY.set(1)
         except Exception as exc:
             # Keep the app bootable; /health will report degraded if load still fails.
             app.state.model_preload_error = str(exc)
+            RECSYS_MODEL_READY.set(0)
+            RECSYS_MODEL_LOAD_FAILURES_TOTAL.inc()
 
     @app.get("/health")
     def health() -> dict[str, str]:
         try:
             _, meta = get_predictor_bundle()
-            return {
-                "status": "ok",
-                "model_source": meta.get("source", ""),
-                "model_name": meta.get("model_name", ""),
-                "model_version": meta.get("model_version", ""),
-                "model_alias": meta.get("model_alias", ""),
-                "cache_hit": meta.get("cache_hit", ""),
-            }
+            RECSYS_MODEL_READY.set(1)
+            return _model_status_payload("ok", meta)
         except Exception:
+            RECSYS_MODEL_READY.set(0)
             return {
                 "status": "degraded",
                 "model_source": "unavailable",
             }
+
+    @app.get("/ready")
+    def ready() -> dict[str, str]:
+        try:
+            _, meta = get_predictor_bundle()
+            RECSYS_MODEL_READY.set(1)
+            return _model_status_payload("ready", meta)
+        except Exception as exc:
+            RECSYS_MODEL_READY.set(0)
+            RECSYS_MODEL_LOAD_FAILURES_TOTAL.inc()
+            raise HTTPException(
+                status_code=503,
+                detail="Model unavailable.",
+            ) from exc
 
     @app.post("/recommend", response_model=RecommendResponse)
     def recommend(
         request: RecommendRequest,
         _: str | None = Depends(verify_api_key),
     ) -> RecommendResponse:
+        latency_start: float | None = None
         try:
             predictor, _ = get_predictor_bundle()
+            RECSYS_MODEL_READY.set(1)
+            quality = predictor.input_quality(request.item_sequence)
+            sequence_length = int(quality["sequence_length"])
+            unknown_items = int(quality["unknown_items"])
+            RECSYS_INPUT_SEQUENCE_LENGTH.observe(sequence_length)
+            RECSYS_REQUESTED_TOP_K.observe(request.top_k)
+            RECSYS_INPUT_ITEMS_TOTAL.inc(sequence_length)
+            RECSYS_OOV_ITEMS_TOTAL.inc(unknown_items)
+
+            latency_start = time.perf_counter()
             recommendations = predictor.get_recommendations(
                 request.item_sequence,
                 top_k=request.top_k,
             )
             # Track business metrics
             RECSYS_RECOMMENDATIONS_TOTAL.inc()
+            RECSYS_RECOMMENDATION_REQUESTS_TOTAL.labels(status="success").inc()
         except FileNotFoundError as exc:
+            RECSYS_MODEL_READY.set(0)
+            RECSYS_MODEL_LOAD_FAILURES_TOTAL.inc()
+            RECSYS_RECOMMENDATION_REQUESTS_TOTAL.labels(
+                status="model_unavailable"
+            ).inc()
             raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except Exception as exc:
+            RECSYS_RECOMMENDATION_REQUESTS_TOTAL.labels(status="error").inc()
+            raise HTTPException(
+                status_code=500,
+                detail="Recommendation failed.",
+            ) from exc
+        finally:
+            if latency_start is not None:
+                RECSYS_PREDICTION_LATENCY_SECONDS.observe(
+                    time.perf_counter() - latency_start
+                )
         return RecommendResponse(
             session_id=request.session_id,
             item_sequence=request.item_sequence,
@@ -194,6 +278,17 @@ def _resolve_model_path() -> str:
         config = load_config(DEFAULT_CONFIG_PATH)
         return config.get("serving", {}).get("model_path", "models/trained/latest/")
     return "models/trained/latest/"
+
+
+def _model_status_payload(status: str, meta: dict[str, str]) -> dict[str, str]:
+    return {
+        "status": status,
+        "model_source": meta.get("source", ""),
+        "model_name": meta.get("model_name", ""),
+        "model_version": meta.get("model_version", ""),
+        "model_alias": meta.get("model_alias", ""),
+        "cache_hit": meta.get("cache_hit", ""),
+    }
 
 
 def create_default_app() -> FastAPI:

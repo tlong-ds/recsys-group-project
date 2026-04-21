@@ -6,7 +6,7 @@ The RecSys API accepts a JSON dictionary representing a session's interaction hi
 
 | Field | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `session_id` | `string` | No | A unique identifier for the user session. Used for tracking. |
+| `session_id` | `string` | No | Optional session identifier echoed in the response for client-side correlation. |
 | `item_sequence` | `list[integer]` | **Yes** | An ordered list of item IDs clicked in the current session. At least one item is required. |
 | `top_k` | `integer` | No | Number of recommendations to return. Default: `10`. Range: `1-100`. |
 
@@ -37,4 +37,12 @@ The RecSys API accepts a JSON dictionary representing a session's interaction hi
 ```
 
 ## Internal Transformation
-Internally, the `item_sequence` is converted into a session graph using **PyTorch Geometric**. The graph is directed, where an edge `(u, v)` exists if item `v` was clicked immediately after item `u`. This graph is then processed by the SR-GNN (Gated Graph Convolution) model to generate embeddings for the session and produce next-item scores via dot-product with the item catalog.
+Internally, the `item_sequence` is converted into the same graph tensor shape
+used by offline evaluation: unique node IDs, directed transition edges, and an
+alias map from sequence positions to graph nodes. The predictor loads the model
+family described by artifact metadata (`model.json`) and dispatches to the
+matching SR-GNN, TAGNN, or GGNN recommender implementation.
+
+The API records request-level monitoring signals before returning the response:
+input sequence length, requested `top_k`, number of unknown/OOV items, request
+outcome, and prediction latency.

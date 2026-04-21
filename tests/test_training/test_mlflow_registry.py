@@ -3,7 +3,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from recsys.training.mlflow_registry import register_model_version
+from recsys.training.mlflow_registry import (
+    register_model_version,
+    set_registered_model_alias,
+)
 
 
 def test_register_model_version_returns_none_when_disabled() -> None:
@@ -40,4 +43,20 @@ def test_register_model_version_registers_and_aliases() -> None:
         name="recsys-srgnn",
         alias="Staging",
         version="3",
+    )
+
+
+def test_set_registered_model_alias_updates_alias() -> None:
+    client = MagicMock()
+    with patch("recsys.training.mlflow_registry._mlflow_client", return_value=client):
+        set_registered_model_alias(
+            model_name="recsys-srgnn",
+            alias="Production",
+            version="9",
+        )
+
+    client.set_registered_model_alias.assert_called_once_with(
+        name="recsys-srgnn",
+        alias="Production",
+        version="9",
     )

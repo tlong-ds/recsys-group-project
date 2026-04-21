@@ -47,6 +47,16 @@ def register_model_version(
     }
 
 
+def set_registered_model_alias(*, model_name: str, alias: str, version: str) -> None:
+    """Point a model alias to a specific registered version."""
+    client = _mlflow_client()
+    client.set_registered_model_alias(
+        name=model_name,
+        alias=str(alias),
+        version=str(version),
+    )
+
+
 def _registry_config(config: dict[str, Any]) -> dict[str, Any]:
     mlflow_cfg = config.get("mlflow", {})
     if not isinstance(mlflow_cfg, dict):

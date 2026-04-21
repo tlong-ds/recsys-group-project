@@ -14,7 +14,6 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 COPY configs /app/configs
 COPY models /app/models
-COPY streamlit_app /app/streamlit_app
 
 RUN addgroup --system --gid 10001 recsys \
     && adduser --system --uid 10001 --ingroup recsys recsys \

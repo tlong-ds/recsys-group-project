@@ -75,6 +75,47 @@ class Predictor:
         """Return scores for candidate items."""
         return self.model.score(item_sequence, item_ids)
 
+    def known_item_count(self) -> int:
+        """Return the known catalog size exposed by the loaded model."""
+        item_to_idx = getattr(self.model, "_item_to_idx", None)
+        if isinstance(item_to_idx, dict) and item_to_idx:
+            return len(item_to_idx)
+
+        n_items = getattr(self.model, "n_items", 0)
+        try:
+            return max(0, int(n_items))
+        except (TypeError, ValueError):
+            return 0
+
+    def count_unknown_items(self, item_sequence: list[int]) -> int:
+        """Count request items not known by the loaded model catalog."""
+        return sum(1 for item in item_sequence if not self._is_known_item(item))
+
+    def input_quality(self, item_sequence: list[int]) -> dict[str, int | float]:
+        """Return lightweight input-quality signals for online monitoring."""
+        sequence_length = len(item_sequence)
+        unknown_items = self.count_unknown_items(item_sequence)
+        known_items = sequence_length - unknown_items
+        oov_ratio = unknown_items / sequence_length if sequence_length else 0.0
+        return {
+            "sequence_length": sequence_length,
+            "known_items": known_items,
+            "unknown_items": unknown_items,
+            "oov_ratio": oov_ratio,
+            "known_catalog_items": self.known_item_count(),
+        }
+
+    def _is_known_item(self, item: int) -> bool:
+        item_to_idx = getattr(self.model, "_item_to_idx", None)
+        if isinstance(item_to_idx, dict) and item_to_idx:
+            return int(item) in item_to_idx
+
+        n_items = getattr(self.model, "n_items", 0)
+        try:
+            return 1 <= int(item) <= int(n_items)
+        except (TypeError, ValueError):
+            return False
+
 
 def _mlflow_client():
     from mlflow.tracking import MlflowClient
