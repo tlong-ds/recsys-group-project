@@ -11,69 +11,20 @@ variable "environment" {
 }
 
 variable "aws_region" {
-  description = "AWS region to deploy EKS."
+  description = "AWS region where the existing EKS cluster is located."
   type        = string
 }
 
-variable "vpc_cidr" {
-  description = "CIDR block for the EKS VPC."
+variable "eks_cluster_name" {
+  description = "The name of the existing EKS cluster."
   type        = string
-  default     = "10.20.0.0/16"
+  default     = "unique-pop-otter"
 }
 
-variable "availability_zones" {
-  description = "Availability zones used by private/public subnets."
-  type        = list(string)
-}
-
-variable "private_subnet_cidrs" {
-  description = "Private subnet CIDRs for worker nodes."
-  type        = list(string)
-}
-
-variable "public_subnet_cidrs" {
-  description = "Public subnet CIDRs for ALB ingress."
-  type        = list(string)
-}
-
-variable "cluster_version" {
-  description = "EKS Kubernetes version."
+variable "github_repo" {
+  description = "GitHub repository (repo:org/repo) for OIDC trust."
   type        = string
-  default     = "1.30"
-}
-
-variable "node_instance_types" {
-  description = "Instance types for the default managed node group."
-  type        = list(string)
-  default     = ["m6i.large"]
-}
-
-variable "node_min_size" {
-  description = "Managed node group minimum size."
-  type        = number
-  default     = 2
-}
-
-variable "node_desired_size" {
-  description = "Managed node group desired size."
-  type        = number
-  default     = 2
-}
-
-variable "node_max_size" {
-  description = "Managed node group maximum size."
-  type        = number
-  default     = 6
-}
-
-variable "route53_zone_id" {
-  description = "Hosted zone ID used by ExternalDNS and cert-manager."
-  type        = string
-}
-
-variable "domain_filters" {
-  description = "Allowed DNS zones for ExternalDNS updates."
-  type        = list(string)
+  default     = "repo:tlong-ds/recsys-group-project"
 }
 
 variable "tags" {
@@ -81,4 +32,3 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
-

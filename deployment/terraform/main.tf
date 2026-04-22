@@ -8,64 +8,20 @@ locals {
     },
     var.tags
   )
+
+  # Construct OIDC ARN manually to avoid iam:ListOpenIDConnectProviders permission issues
+  oidc_issuer       = data.aws_eks_cluster.this.identity[0].oidc[0].issuer
+  oidc_provider_url = replace(local.oidc_issuer, "https://", "")
+  oidc_provider_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${local.oidc_provider_url}"
 }
 
-module "vpc" {
-  source  = "terraform-aws-modules/vpc/aws"
-  version = "~> 5.0"
-
-  name = local.name
-  cidr = var.vpc_cidr
-
-  azs             = var.availability_zones
-  private_subnets = var.private_subnet_cidrs
-  public_subnets  = var.public_subnet_cidrs
-
-  enable_nat_gateway = true
-  single_nat_gateway = false
-
-  public_subnet_tags = {
-    "kubernetes.io/role/elb" = "1"
-  }
-
-  private_subnet_tags = {
-    "kubernetes.io/role/internal-elb" = "1"
-  }
-
-  tags = local.tags
+data "aws_eks_cluster" "this" {
+  name = var.eks_cluster_name
 }
 
-module "eks" {
-  source  = "terraform-aws-modules/eks/aws"
-  version = "~> 20.0"
-
-  cluster_name    = local.name
-  cluster_version = var.cluster_version
-
-  cluster_endpoint_public_access = true
-  enable_irsa                    = true
-
-  vpc_id     = module.vpc.vpc_id
-  subnet_ids = module.vpc.private_subnets
-
-  eks_managed_node_groups = {
-    default = {
-      min_size       = var.node_min_size
-      desired_size   = var.node_desired_size
-      max_size       = var.node_max_size
-      instance_types = var.node_instance_types
-      capacity_type  = "ON_DEMAND"
-    }
-  }
-
-  cluster_addons = {
-    coredns = {}
-    kube-proxy = {}
-    vpc-cni = {}
-  }
-
-  tags = local.tags
-}
+################################################################################
+# IAM Roles for Service Accounts (IRSA)
+################################################################################
 
 module "alb_controller_irsa" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
@@ -77,7 +33,7 @@ module "alb_controller_irsa" {
 
   oidc_providers = {
     main = {
-      provider_arn               = module.eks.oidc_provider_arn
+      provider_arn               = local.oidc_provider_arn
       namespace_service_accounts = ["kube-system:aws-load-balancer-controller"]
     }
   }
@@ -91,19 +47,20 @@ module "external_dns_irsa" {
 
   role_name                  = "${local.name}-external-dns"
   attach_external_dns_policy = true
-  external_dns_hosted_zone_arns = [
-    "arn:aws:route53:::hostedzone/${var.route53_zone_id}"
-  ]
 
   oidc_providers = {
     main = {
-      provider_arn               = module.eks.oidc_provider_arn
+      provider_arn               = local.oidc_provider_arn
       namespace_service_accounts = ["kube-system:external-dns"]
     }
   }
 
   tags = local.tags
 }
+
+################################################################################
+# Helm Releases
+################################################################################
 
 resource "helm_release" "aws_load_balancer_controller" {
   name             = "aws-load-balancer-controller"
@@ -115,7 +72,7 @@ resource "helm_release" "aws_load_balancer_controller" {
 
   set {
     name  = "clusterName"
-    value = module.eks.cluster_name
+    value = var.eks_cluster_name
   }
 
   set {
@@ -133,58 +90,57 @@ resource "helm_release" "aws_load_balancer_controller" {
     value = module.alb_controller_irsa.iam_role_arn
   }
 
-  depends_on = [module.eks]
+  set {
+    name  = "vpcId"
+    value = "vpc-0611a00fc16788168"
+  }
+
+  set {
+    name  = "region"
+    value = var.aws_region
+  }
 }
 
-resource "helm_release" "external_dns" {
-  name             = "external-dns"
-  repository       = "https://kubernetes-sigs.github.io/external-dns"
-  chart            = "external-dns"
-  namespace        = "kube-system"
-  create_namespace = false
-  version          = "1.15.0"
+################################################################################
+# GitHub Actions OIDC & Deployment Role
+################################################################################
 
-  set {
-    name  = "provider.name"
-    value = "aws"
-  }
-
-  set {
-    name  = "serviceAccount.create"
-    value = "true"
-  }
-
-  set {
-    name  = "serviceAccount.name"
-    value = "external-dns"
-  }
-
-  set {
-    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = module.external_dns_irsa.iam_role_arn
-  }
-
-  set {
-    name  = "policy"
-    value = "sync"
-  }
-
-  set_list {
-    name  = "domainFilters"
-    value = var.domain_filters
-  }
-
-  depends_on = [module.eks]
+module "github_oidc" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-github-oidc-provider"
+  version = "~> 5.39"
 }
 
-resource "helm_release" "metrics_server" {
-  name             = "metrics-server"
-  repository       = "https://kubernetes-sigs.github.io/metrics-server"
-  chart            = "metrics-server"
-  namespace        = "kube-system"
-  create_namespace = false
-  version          = "3.12.2"
+module "github_actions_role" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-github-oidc-role"
+  version = "~> 5.39"
 
-  depends_on = [module.eks]
+  name = "${local.name}-github-actions-deployer"
+
+  subjects = ["${var.github_repo}:*"]
+
+  policies = {
+    EKS_Admin  = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+    S3_Backend = aws_iam_policy.github_actions_s3_backend.arn
+  }
+
+  tags = local.tags
 }
 
+resource "aws_iam_policy" "github_actions_s3_backend" {
+  name        = "${local.name}-github-actions-s3-backend"
+  description = "Allow GitHub Actions to access Terraform state bucket"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = ["s3:GetObject", "s3:PutObject", "s3:ListBucket"]
+        Effect   = "Allow"
+        Resource = [
+          "arn:aws:s3:::recsys-data-storage-067518243363-ap-southeast-1-an",
+          "arn:aws:s3:::recsys-data-storage-067518243363-ap-southeast-1-an/*"
+        ]
+      }
+    ]
+  })
+}

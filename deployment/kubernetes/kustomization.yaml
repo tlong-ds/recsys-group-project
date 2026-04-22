@@ -20,3 +20,8 @@ resources:
   - grafana-deployment.yaml
   - grafana-service.yaml
   - grafana-pdb.yaml
+
+images:
+  - name: ghcr.io/tlong-ds/recsys-group-project
+    newName: ghcr.io/tlong-ds/recsys-group-project
+    newTag: main

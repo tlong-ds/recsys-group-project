@@ -95,7 +95,9 @@ jobs:
       - name: Deploy manifests
         run: |
           cd deployment/kubernetes
-          kustomize edit set image ghcr.io/tlong-ds/recsys-group-project=ghcr.io/${{ github.repository }}:${DEPLOY_IMAGE_TAG}
+          # Map the hardcoded image in the deployment to the dynamic GHCR image
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          kustomize edit set image ghcr.io/tlong-ds/recsys-group-project=ghcr.io/${REPO_LOWER}:${DEPLOY_IMAGE_TAG}
           kubectl apply -k .
 
       - name: Wait for rollouts
