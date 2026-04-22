@@ -1,26 +1,11 @@
 output "cluster_name" {
   description = "EKS cluster name."
-  value       = module.eks.cluster_name
+  value       = data.aws_eks_cluster.this.name
 }
 
 output "cluster_endpoint" {
   description = "EKS API server endpoint."
-  value       = module.eks.cluster_endpoint
-}
-
-output "vpc_id" {
-  description = "VPC ID used by EKS."
-  value       = module.vpc.vpc_id
-}
-
-output "private_subnet_ids" {
-  description = "Private subnet IDs used by worker nodes."
-  value       = module.vpc.private_subnets
-}
-
-output "public_subnet_ids" {
-  description = "Public subnet IDs used by ALB."
-  value       = module.vpc.public_subnets
+  value       = data.aws_eks_cluster.this.endpoint
 }
 
 output "external_dns_role_arn" {
@@ -28,3 +13,7 @@ output "external_dns_role_arn" {
   value       = module.external_dns_irsa.iam_role_arn
 }
 
+output "github_actions_role_arn" {
+  description = "ARN of the IAM Role for GitHub Actions deployment."
+  value       = module.github_actions_role.arn
+}

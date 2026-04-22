@@ -26,6 +26,28 @@ recsys-group-project/
 └── README.md
 ```
 
+## Technology Stack
+
+### Backend (Python 3.10+)
+- **Core Framework:** [FastAPI](https://fastapi.tiangolo.com/), [Uvicorn](https://www.uvicorn.org/)
+- **Machine Learning:** [PyTorch](https://pytorch.org/), [PyTorch Geometric](https://pytorch-geometric.readthedocs.io/) (SR-GNN, GGNN, TAGNN), [Scikit-learn](https://scikit-learn.org/)
+- **Data Processing:** [Polars](https://pola.rs/), [Pandas](https://pandas.pydata.org/), [PyArrow](https://arrow.apache.org/docs/python/), [Pandera](https://pandera.readthedocs.io/) (Schema Validation)
+- **Experiment Tracking:** [MLflow](https://mlflow.org/), [DagsHub](https://dagshub.com/)
+- **Data Versioning:** [DVC](https://dvc.org/) (Data Version Control) with S3 backend
+- **Utilities:** [Loguru](https://github.com/Delgan/loguru) (Logging), [Pydantic](https://docs.pydantic.dev/) (Data Validation), [PyYAML](https://pyyaml.org/)
+
+### DevOps & Infrastructure
+- **Containerization:** [Docker](https://www.docker.com/), [Docker Compose](https://docs.docker.com/compose/)
+- **Orchestration:** [Kubernetes](https://kubernetes.io/) (AWS EKS), [Kustomize](https://kustomize.io/)
+- **Infrastructure as Code:** [Terraform](https://www.terraform.io/)
+- **CI/CD:** [GitHub Actions](https://github.com/features/actions), [GitHub Container Registry](https://github.com/features/packages) (GHCR)
+- **Monitoring:** [Prometheus](https://prometheus.io/), [Grafana](https://grafana.com/), [Evidently](https://www.evidentlyai.com/) (Model Drift & Quality)
+
+### Testing & Quality
+- **Testing:** [Pytest](https://docs.pytest.org/), [Unittest](https://docs.python.org/3/library/unittest.html)
+- **Linting & Formatting:** [Ruff](https://beta.ruff.rs/docs/), [ESLint](https://eslint.org/)
+- **Static Analysis:** [Mypy](http://mypy-lang.org/), [Bandit](https://bandit.readthedocs.io/) (Security), [Pip-audit](https://github.com/pypa/pip-audit)
+
 ## Local commands
 
 ```bash
