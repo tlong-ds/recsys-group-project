@@ -1,56 +1,50 @@
 # Data Processing Configuration
 data:
-  # Direct inputs for training from preprocessed feature-level artifacts
-  train_examples_path: data/processed/train_examples.parquet
-  val_examples_path: data/processed/val_examples.parquet
-  test_examples_path: data/processed/test_examples.parquet
-  item_vocab_path: data/processed/item_vocab.json
-
   # Paths
   raw_path: data/raw
   interim_path: data/interim
   processed_path: data/processed
-  
+
   # Input file names
-  interactions_file: "train-item-views.csv"  
-  
+  interactions_file: "train-item-views.csv"
+
   # Column names mapping
   columns:
     session_id: sessionId
     item_id: itemId
-    event_date: eventdate  # Canonical time column used throughout the pipeline
-    timeframe: timeframe    
-  
+    event_date: eventdate # Canonical time column used throughout the pipeline
+    timeframe: timeframe
+
   # CSV reading parameters
   csv_params:
     sep: ";"
     encoding: "utf-8"
-  
+
   # Validation thresholds
   validation:
-    min_session_length: 2  # Sessions with < 2 items are filtered
-    min_item_frequency: 5  # Items appearing < 5 times are filtered
-    max_session_length: 20  # Cap session length to avoid outliers (optional)
-    allow_duplicates: true  # Whether to allow duplicate item_id in same session
-  
+    min_session_length: 2 # Sessions with < 2 items are filtered
+    min_item_frequency: 5 # Items appearing < 5 times are filtered
+    max_session_length: 20 # Cap session length to avoid outliers (optional)
+    allow_duplicates: true # Whether to allow duplicate item_id in same session
+
   # Temporal split configuration
   temporal_split:
-    strategy: "diginetica_legacy"  # Options: "diginetica_legacy", "time_based", "ratio_based", "session_based"
-    test_days: 7            # Last N days for test set
-    val_days: 7             # Set 0 to match original Diginetica script (train/test only)
+    strategy: "diginetica_legacy" # Options: "diginetica_legacy", "time_based", "ratio_based", "session_based"
+    test_days: 7 # Last N days for test set
+    val_days: 7 # Set 0 to match original Diginetica script (train/test only)
     # If using ratio_based:
     train_ratio: 0.7
     val_ratio: 0.15
     test_ratio: 0.15
-  
+
   # Data output format
-  output_format: "parquet"  # Options: "parquet", "csv"
-  training_example_format: "graph"  # Options: "graph", "sequence"
-  parquet_compression: "snappy"  # Options: "snappy", "gzip", "brotli"
-  
+  output_format: "parquet" # Options: "parquet", "csv"
+  training_example_format: "graph" # Options: "graph", "sequence"
+  parquet_compression: "snappy" # Options: "snappy", "gzip", "brotli"
+
   # Random seed for reproducibility
   random_seed: 42
-  
+
   # Logging and reporting
   logging:
     level: "INFO" # Options: "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
