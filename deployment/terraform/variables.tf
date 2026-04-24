@@ -18,17 +18,26 @@ variable "aws_region" {
 variable "eks_cluster_name" {
   description = "The name of the existing EKS cluster."
   type        = string
-  default     = "unique-pop-otter"
+}
+
+variable "terraform_state_bucket" {
+  description = "The name of the S3 bucket used for Terraform state."
+  type        = string
 }
 
 variable "github_repo" {
   description = "GitHub repository (repo:org/repo) for OIDC trust."
   type        = string
-  default     = "repo:tlong-ds/recsys-group-project"
 }
 
 variable "tags" {
   description = "Extra tags to apply to created resources."
   type        = map(string)
   default     = {}
+}
+
+variable "private_subnet_ids" {
+  description = "A list of private subnet IDs for EKS resources (Fargate/Nodes)."
+  type        = list(string)
+  default     = []
 }

@@ -92,7 +92,7 @@ resource "helm_release" "aws_load_balancer_controller" {
 
   set {
     name  = "vpcId"
-    value = "vpc-0611a00fc16788168"
+    value = data.aws_eks_cluster.this.vpc_config[0].vpc_id
   }
 
   set {
@@ -100,6 +100,23 @@ resource "helm_release" "aws_load_balancer_controller" {
     value = var.aws_region
   }
 }
+
+################################################################################
+# Metrics Server (Managed by EKS Add-on)
+################################################################################
+# Metrics Server is already installed as an EKS managed add-on.
+
+################################################################################
+# EKS Fargate Profile
+################################################################################
+# Fargate Profile skipped as the current VPC only contains public subnets.
+# EKS Auto Mode can handle serverless workloads if private subnets are added.
+
+################################################################################
+# Karpenter (Managed by EKS Auto Mode)
+################################################################################
+# EKS Auto Mode is enabled on this cluster, which provides managed Karpenter 
+# functionality. Manual Karpenter installation is omitted to avoid conflicts.
 
 ################################################################################
 # GitHub Actions OIDC & Deployment Role
@@ -137,8 +154,8 @@ resource "aws_iam_policy" "github_actions_s3_backend" {
         Action = ["s3:GetObject", "s3:PutObject", "s3:ListBucket"]
         Effect   = "Allow"
         Resource = [
-          "arn:aws:s3:::recsys-data-storage-067518243363-ap-southeast-1-an",
-          "arn:aws:s3:::recsys-data-storage-067518243363-ap-southeast-1-an/*"
+          "arn:aws:s3:::${var.terraform_state_bucket}",
+          "arn:aws:s3:::${var.terraform_state_bucket}/*"
         ]
       }
     ]
