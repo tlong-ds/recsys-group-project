@@ -1,12 +1,12 @@
 data:
-  interim_path: data/interim
-  processed_path: data/processed
-  train_examples_path: data/processed/train_examples.parquet
-  val_examples_path: data/processed/val_examples.parquet
-  test_examples_path: data/processed/test_examples.parquet
-  item_vocab_path: data/processed/item_vocab.json
+  interim_path: data/versions/baseline/interim
+  processed_path: data/versions/baseline/processed
+  train_examples_path: data/versions/baseline/processed/train_examples.parquet
+  val_examples_path: data/versions/baseline/processed/val_examples.parquet
+  test_examples_path: data/versions/baseline/processed/test_examples.parquet
+  item_vocab_path: data/versions/baseline/processed/item_vocab.json
   logging:
-    report_path: data/validation_report.json
+    report_path: data/versions/baseline/validation_report.json
   validation:
     min_session_length: 3
     min_item_frequency: 5

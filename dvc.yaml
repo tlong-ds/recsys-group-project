@@ -198,6 +198,36 @@ stages:
       - metrics/baseline/evaluation_metrics.json:
           cache: false
 
+  data_version_baseline:
+    cmd: python -m recsys.data.pipeline --stage all --config configs/data_config.yaml --params configs/data_versions/baseline.yaml
+    deps:
+      - src/recsys/data/pipeline.py
+      - src/recsys/data/ingest.py
+      - src/recsys/data/validator.py
+      - src/recsys/data/preprocessor.py
+      - src/recsys/data/splitter.py
+      - src/recsys/data/training_examples.py
+      - src/recsys/data/stages.py
+      - src/recsys/utils/config.py
+      - configs/data_config.yaml
+      - configs/data_versions/baseline.yaml
+      - data/raw/train-item-views.csv
+    outs:
+      - data/versions/baseline/interim/interactions.parquet
+      - data/versions/baseline/interim/clean_interactions.parquet
+      - data/versions/baseline/interim/train_interactions.parquet
+      - data/versions/baseline/interim/val_interactions.parquet
+      - data/versions/baseline/interim/test_interactions.parquet
+      - data/versions/baseline/processed/train_examples.parquet
+      - data/versions/baseline/processed/val_examples.parquet
+      - data/versions/baseline/processed/test_examples.parquet
+      - data/versions/baseline/processed/item_vocab.json
+    metrics:
+      - data/versions/baseline/processed/data_stats.json:
+          cache: false
+      - data/versions/baseline/validation_report.json:
+          cache: false
+
   data_version_v1:
     cmd: python -m recsys.data.pipeline --stage all --config configs/data_config.yaml --params configs/data_versions/v1_strict_filter.yaml
     deps:
@@ -589,6 +619,7 @@ stages:
       - data/versions/${item.data_version}/processed/train_examples.parquet
       - data/versions/${item.data_version}/processed/val_examples.parquet
       - data/versions/${item.data_version}/processed/item_vocab.json
+      - data/versions/${item.data_version}/processed/data_stats.json
     outs:
       - models/experiments/${item.data_version}/${item.model_profile}/latest:
           cache: true
@@ -667,6 +698,7 @@ stages:
       - data/versions/${item.data_version}/processed/train_examples.parquet
       - data/versions/${item.data_version}/processed/val_examples.parquet
       - data/versions/${item.data_version}/processed/item_vocab.json
+      - data/versions/${item.data_version}/processed/data_stats.json
     outs:
       - models/experiments/${item.data_version}/${item.model_profile}/latest:
           cache: true
@@ -731,6 +763,7 @@ stages:
       - configs/data_versions/${item.data_version}.yaml
       - models/experiments/${item.data_version}/${item.model_profile}/latest/model.json
       - data/versions/${item.data_version}/processed/test_examples.parquet
+      - data/versions/${item.data_version}/processed/data_stats.json
     metrics:
       - metrics/experiments/${item.data_version}/${item.model_profile}/evaluation_metrics.json:
           cache: false
@@ -788,6 +821,7 @@ stages:
       - configs/data_versions/${item.data_version}.yaml
       - models/experiments/${item.data_version}/${item.model_profile}/latest/model.json
       - data/versions/${item.data_version}/processed/test_examples.parquet
+      - data/versions/${item.data_version}/processed/data_stats.json
     metrics:
       - metrics/experiments/${item.data_version}/${item.model_profile}/evaluation_metrics.json:
           cache: false
