@@ -31,21 +31,21 @@ services:
     restart: unless-stopped
     networks: [recsys]
 
-  # frontend:
-  #   image: node:20-alpine
-  #   working_dir: /app
-  #   command: ["sh", "-c", "npm ci && npm run dev -- --host 0.0.0.0 --port 5173"]
-  #   environment:
-  #     VITE_API_PROXY_TARGET: http://api:8000
-  #   ports:
-  #     - "5173:5173"
-  #   volumes:
-  #     - ./frontend:/app
-  #   depends_on:
-  #     api:
-  #       condition: service_healthy
-  #   restart: unless-stopped
-  #   networks: [recsys]
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    command: ["sh", "-c", "npm ci && npm run dev -- --host 0.0.0.0 --port 5173"]
+    environment:
+      VITE_API_PROXY_TARGET: http://api:8000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [recsys]
 
   mlflow:
     image: python:3.11-slim
