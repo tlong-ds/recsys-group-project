@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import mlflow
 
-from recsys.models.graph_helpers import GraphRecommenderBase
+if TYPE_CHECKING:
+    from recsys.models.graph_helpers import GraphRecommenderBase
 
 DEFAULT_REPO_OWNER = "lytlong.pers"
 DEFAULT_REPO_NAME = "recsys-group-project"
