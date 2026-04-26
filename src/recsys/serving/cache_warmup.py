@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from loguru import logger
 from mlflow.tracking import MlflowClient
 
 from recsys.serving.predictor import (
@@ -123,9 +124,9 @@ def main() -> None:
 
     try:
         result = run_warmup(Path(args.config))
-        print(result)
+        logger.info("Model cache warmup result: {}", result)
     except Exception as exc:
-        print(f"Model cache warmup failed: {exc}")
+        logger.error("Model cache warmup failed: {}", exc)
         if args.strict:
             raise
 

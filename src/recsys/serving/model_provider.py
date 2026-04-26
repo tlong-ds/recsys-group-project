@@ -68,6 +68,22 @@ class ModelProvider:
                 or deploy_overrides.get("cache_root")
                 or registry_cfg.get("local_cache_dir")
             )
+            overrides = deploy_overrides
+            has_pins = bool(
+                overrides.get("model_name")
+                or overrides.get("model_version")
+                or overrides.get("run_id")
+            )
+            if not has_pins and not bool(
+                registry_cfg.get("fallback_to_filesystem", True)
+            ):
+                logger.warning(
+                    "Registry-first mode with fallback_to_filesystem=false, "
+                    "but no RECSYS_DEPLOY_MODEL_NAME/VERSION/RUN_ID env vars are set. "
+                    "The model will resolve via the configured alias '{}' only.",
+                    model_alias,
+                )
+
             try:
                 bundle = Predictor.from_model_registry(
                     mlflow_config=self._mlflow_config,
@@ -79,6 +95,12 @@ class ModelProvider:
                     cache_dir=str(cache_dir) if cache_dir else None,
                 )
                 self._bundle = bundle
+                logger.info(
+                    "Model loaded from registry: name={}, version={}, run_id={}",
+                    bundle[1].get("model_name", ""),
+                    bundle[1].get("model_version", ""),
+                    bundle[1].get("run_id", ""),
+                )
                 return bundle
             except Exception:
                 if not bool(registry_cfg.get("fallback_to_filesystem", True)):
@@ -108,6 +130,12 @@ class ModelProvider:
             RECSYS_MODEL_READY.set(0)
             RECSYS_MODEL_LOAD_FAILURES_TOTAL.inc()
             logger.warning("Model preload failed: {}", exc)
+
+    def model_identity(self) -> dict[str, str] | None:
+        """Return the loaded model's identity metadata, or *None* if not yet loaded."""
+        if self._bundle is None:
+            return None
+        return dict(self._bundle[1])
 
     def health_payload(self) -> dict[str, str]:
         """Return a health-check dict.  Never raises."""

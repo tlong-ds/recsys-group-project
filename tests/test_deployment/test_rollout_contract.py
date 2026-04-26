@@ -4,7 +4,6 @@ from pathlib import Path
 
 import yaml
 
-
 _PIN_KEYS = (
     "RECSYS_DEPLOY_MODEL_NAME",
     "RECSYS_DEPLOY_MODEL_VERSION",
@@ -76,3 +75,63 @@ def test_deploy_workflow_consumes_promotion_result_contract() -> None:
     assert "model_name={model_name}" in workflow_text
     assert "model_version={model_version}" in workflow_text
     assert "run_id={run_id}" in workflow_text
+
+
+def test_api_container_has_startup_probe() -> None:
+    path = _repo_root() / "deployment/kubernetes/api-deployment.yaml"
+    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    pod_spec = payload["spec"]["template"]["spec"]
+
+    api_container = next(
+        c for c in pod_spec.get("containers", []) if c.get("name") == "api"
+    )
+
+    startup_probe = api_container.get("startupProbe")
+    assert startup_probe is not None, "api container must have a startupProbe"
+    assert startup_probe["httpGet"]["path"] == "/ready"
+    # Budget should allow at least 2 minutes for model loading
+    budget_seconds = startup_probe.get("failureThreshold", 1) * startup_probe.get(
+        "periodSeconds", 10
+    )
+    assert budget_seconds >= 120, f"startup budget {budget_seconds}s is too short"
+
+
+def test_termination_grace_period_is_sufficient() -> None:
+    path = _repo_root() / "deployment/kubernetes/api-deployment.yaml"
+    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    pod_spec = payload["spec"]["template"]["spec"]
+
+    grace = pod_spec.get("terminationGracePeriodSeconds", 30)
+    assert grace >= 30, f"terminationGracePeriodSeconds={grace} is too low"
+
+
+def test_rolling_update_strategy_zero_unavailable() -> None:
+    path = _repo_root() / "deployment/kubernetes/api-deployment.yaml"
+    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    strategy = payload["spec"].get("strategy", {})
+
+    assert strategy.get("type") == "RollingUpdate"
+    rolling = strategy.get("rollingUpdate", {})
+    assert rolling.get("maxUnavailable") == 0
+
+
+def test_hpa_min_replicas_at_least_two() -> None:
+    path = _repo_root() / "deployment/kubernetes/api-hpa.yaml"
+    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+
+    min_replicas = payload["spec"].get("minReplicas", 1)
+    assert min_replicas >= 2, f"HPA minReplicas={min_replicas} is too low for HA"
+
+
+def test_api_container_has_prestop_hook() -> None:
+    path = _repo_root() / "deployment/kubernetes/api-deployment.yaml"
+    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    pod_spec = payload["spec"]["template"]["spec"]
+
+    api_container = next(
+        c for c in pod_spec.get("containers", []) if c.get("name") == "api"
+    )
+
+    lifecycle = api_container.get("lifecycle", {})
+    pre_stop = lifecycle.get("preStop")
+    assert pre_stop is not None, "api container must have a preStop lifecycle hook"
