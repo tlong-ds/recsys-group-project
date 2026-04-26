@@ -20,6 +20,10 @@ spec:
         - podSelector:
             matchLabels:
               app: recsys-api-client
+        # Allow ingress from the VPC (ALB target-type: ip)
+        # In production, replace with your actual VPC CIDR for tighter security.
+        - ipBlock:
+            cidr: 0.0.0.0/0 
       ports:
         - protocol: TCP
           port: 8000

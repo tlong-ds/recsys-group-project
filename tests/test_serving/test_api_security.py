@@ -22,7 +22,13 @@ class FakePredictor:
         }
 
 
-def _app(monkeypatch, *, rate_limit_per_minute: int = 120, max_body_bytes: int = 65536):
+def _app(
+    monkeypatch,
+    *,
+    rate_limit_per_minute: int = 120,
+    max_body_bytes: int = 65536,
+    serving_config_overrides: dict[str, Any] | None = None,
+):
     monkeypatch.setenv("RECSYS_API_KEYS", "test-key,rotated-key")
     predictor_module = importlib.import_module("recsys.serving.predictor")
     monkeypatch.setattr(
@@ -31,18 +37,23 @@ def _app(monkeypatch, *, rate_limit_per_minute: int = 120, max_body_bytes: int =
         staticmethod(lambda _: FakePredictor()),
     )
     api_module = importlib.import_module("recsys.serving.api")
+
+    serving_config = {
+        "security": {
+            "enabled": True,
+            "api_keys_env_var": "RECSYS_API_KEYS",
+            "public_paths": ["/health"],
+            "rate_limit_per_minute": rate_limit_per_minute,
+            "max_body_bytes": max_body_bytes,
+            "docs_enabled": False,
+        }
+    }
+    if serving_config_overrides:
+        serving_config.update(serving_config_overrides)
+
     return api_module.create_app(
         model_path="unused",
-        serving_config={
-            "security": {
-                "enabled": True,
-                "api_keys_env_var": "RECSYS_API_KEYS",
-                "public_paths": ["/health"],
-                "rate_limit_per_minute": rate_limit_per_minute,
-                "max_body_bytes": max_body_bytes,
-                "docs_enabled": False,
-            }
-        },
+        serving_config=serving_config,
         mlflow_config={},
     )
 
@@ -120,18 +131,32 @@ def test_ready_is_public(monkeypatch) -> None:
 
 
 def test_cors_uses_configured_allowed_origins(monkeypatch) -> None:
-    app = _app(monkeypatch)
+    allowed_origins = [
+        "http://0.0.0.0:5173",
+        "https://recsys-group-project.lytlong-pers.workers.dev/",
+    ]
+    app = _app(
+        monkeypatch,
+        serving_config_overrides={
+            "cors": {"allowed_origins": allowed_origins}
+        }
+    )
     client = TestClient(app)
-    allowed_origin = "http://0.0.0.0:5173"
     blocked_origin = "https://example.invalid"
 
-    allowed_response = client.options(
-        "/recommend",
-        headers={
-            "Origin": allowed_origin,
-            "Access-Control-Request-Method": "POST",
-        },
-    )
+    for origin in allowed_origins:
+        # Strip trailing slash if any, as browsers send origin without it
+        origin_header = origin.rstrip("/")
+        response = client.options(
+            "/recommend",
+            headers={
+                "Origin": origin_header,
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+        assert response.status_code == 200
+        assert response.headers["access-control-allow-origin"] == origin_header
+
     blocked_response = client.options(
         "/recommend",
         headers={
@@ -139,9 +164,6 @@ def test_cors_uses_configured_allowed_origins(monkeypatch) -> None:
             "Access-Control-Request-Method": "POST",
         },
     )
-
-    assert allowed_response.status_code == 200
-    assert allowed_response.headers["access-control-allow-origin"] == allowed_origin
     assert blocked_response.status_code == 400
     assert "access-control-allow-origin" not in blocked_response.headers
 

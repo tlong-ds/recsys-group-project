@@ -7,6 +7,7 @@ serving:
   cors:
     allowed_origins:
       - http://0.0.0.0:5173
+      - https://recsys-group-project.lytlong-pers.workers.dev/
   security:
     enabled: true
     api_keys_env_var: RECSYS_API_KEYS

@@ -206,11 +206,11 @@ def _cors_allowed_origins(serving_config: dict[str, Any]) -> list[str]:
     cors_config = raw_cors if isinstance(raw_cors, dict) else {}
     raw_origins = cors_config.get("allowed_origins", DEFAULT_CORS_ALLOWED_ORIGINS)
     if isinstance(raw_origins, str):
-        origins = [origin.strip() for origin in raw_origins.split(",")]
+        origins = [origin.strip().rstrip("/") for origin in raw_origins.split(",")]
     elif isinstance(raw_origins, list | tuple):
-        origins = [str(origin).strip() for origin in raw_origins]
+        origins = [str(origin).strip().rstrip("/") for origin in raw_origins]
     else:
-        origins = list(DEFAULT_CORS_ALLOWED_ORIGINS)
+        origins = [str(o).rstrip("/") for o in DEFAULT_CORS_ALLOWED_ORIGINS]
 
     allowed_origins = [origin for origin in origins if origin]
     return allowed_origins or list(DEFAULT_CORS_ALLOWED_ORIGINS)
