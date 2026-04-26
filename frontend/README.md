@@ -17,12 +17,15 @@ The React Compiler is not enabled on this template because of its impact on dev 
 
 To deploy the frontend to Cloudflare Pages:
 
-1.  **Redirects**: Ensure `public/_redirects` contains your AWS ALB address:
+1.  **API Proxy Function**: The project includes `functions/api/[[path]].ts` which proxies `/api/*` to your backend.
+2.  **Environment Variables**:
+    - Add `VITE_RECSYS_API_KEY` in the Cloudflare Pages dashboard.
+    - Add `API_ORIGIN` in Cloudflare Pages Functions settings (required, for example `http://your-alb-dns.ap-southeast-1.elb.amazonaws.com`).
+3.  **Redirects**: Keep `public/_redirects` as SPA fallback:
     ```text
-    /api/* http://k8s-recsys-815ed517db-1580135138.ap-southeast-1.elb.amazonaws.com/:splat 200
+    /* /index.html 200
     ```
-2.  **Environment Variables**: Add `VITE_RECSYS_API_KEY` in the Cloudflare Pages dashboard.
-3.  **Build Settings**:
+4.  **Build Settings**:
     - **Framework preset**: `Vite`
     - **Build command**: `npm run build`
     - **Build output directory**: `dist`
