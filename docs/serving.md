@@ -17,7 +17,6 @@ Serving is configured via `configs/serving_config.yaml` or CLI arguments.
 Key settings:
 - `host`: Host IP (default: `0.0.0.0`)
 - `port`: Serving port (default: `8000`)
-- `model_path`: Path to the trained model directory or file (default: `models/trained/latest/`)
 - `preload_model_on_startup`: If `true`, loads the predictor during API startup to reduce first-request latency.
 - `default_top_k`: Default number of recommendations to return.
 - `model_registry.enabled`: Use MLflow Model Registry for model resolution.
@@ -25,7 +24,8 @@ Key settings:
 - `model_registry.model_alias` or `model_registry.model_version`: Selector for deployable model.
 - `model_registry.artifact_path`: Artifact directory downloaded from selected run (default: `registered_model`).
 - `model_registry.local_cache_dir`: Optional persistent cache directory for downloaded registry artifacts.
-- `model_registry.fallback_to_filesystem`: If `true`, serving falls back to `model_path` when registry resolution fails.
+- `model_registry.fallback_to_filesystem`: Defaults to `false` for registry-only serving.
+- `model_path`: Optional legacy fallback path used only if filesystem fallback is explicitly enabled.
 - `security.enabled`: Require API-key auth for protected endpoints.
 - `security.api_keys_env_var`: Environment variable containing comma-separated API keys.
 - `security.public_paths`: Paths that stay public. Default: `/health`.
@@ -33,14 +33,10 @@ Key settings:
 - `security.max_body_bytes`: Maximum declared request body size.
 - `security.docs_enabled`: Expose or disable FastAPI docs/OpenAPI routes.
 
-Model path note:
-- The default path is `models/trained/latest/`.
-- Current checked-in versioned artifacts live under paths such as
-  `models/trained/v1_strict_filter/latest/`,
-  `models/trained/v2_sliding_window/latest/`, and
-  `models/trained/v3_train_plus_val/latest/`.
-- For local demos, point `serving.model_path` at the artifact you want to serve
-  or enable MLflow model registry loading.
+Model source note:
+- Production serving should resolve only from MLflow Registry (`recsys-serving`).
+- `metrics/promotion_result.json` is the deployment pin contract (`model_name`, `model_version`, `run_id`).
+- Local filesystem loading is supported only as an explicit compatibility fallback.
 
 ## Endpoints
 - `GET /health`: Public liveness endpoint with sanitized model status.
@@ -48,18 +44,18 @@ Model path note:
 - `POST /recommend`: Authenticated recommendation endpoint.
 - `GET /metrics`: Authenticated Prometheus metrics endpoint.
 
-When model registry loading is enabled, `/health` exposes only non-sensitive
-source metadata. It does not return local artifact paths, run IDs, or raw
-exceptions.
+When model registry loading is enabled, `/health` exposes only source metadata
+used for deployment checks (`model_source`, `model_name`, `model_version`,
+`run_id`). It does not return local artifact paths or raw exceptions.
 
 `/recommend` also records online monitoring signals for Prometheus, including
 request outcome, prediction latency, input sequence length, requested `top_k`,
 and OOV item counts against the loaded model catalog. These online signals are
 separate from the offline benchmark replay drift reports in `recsys.monitoring`.
 
-For CT-driven deployments, keep `model_registry.model_alias` set to the alias
-managed by the promotion process (for example `Production`) so serving follows
-model promotions without changing image tags.
+For CT-driven deployments, the release should pin `RECSYS_DEPLOY_MODEL_NAME`,
+`RECSYS_DEPLOY_MODEL_VERSION`, and `RECSYS_DEPLOY_RUN_ID` from
+`metrics/promotion_result.json` so prewarm and API resolve the same model.
 
 ## Running Locally
 To run the server locally, you can use the provided CLI entrypoint or Docker Compose:

@@ -134,6 +134,55 @@ def test_registry_falls_back_to_filesystem_when_enabled(monkeypatch) -> None:
     assert calls["from_path"] == 1
 
 
+def test_registry_failure_without_fallback_returns_degraded(monkeypatch) -> None:
+    api_module = importlib.import_module("recsys.serving.api")
+    calls = {"from_registry": 0, "from_path": 0}
+
+    async def _fake_create_pool(*_args, **_kwargs):
+        return _DummyPool()
+
+    def _from_registry(**_kwargs):
+        calls["from_registry"] += 1
+        raise RuntimeError("registry unavailable")
+
+    def _from_path(_model_path: str):
+        calls["from_path"] += 1
+        return _FakePredictor()
+
+    monkeypatch.setattr(api_module.asyncpg, "create_pool", _fake_create_pool)
+    monkeypatch.setattr(
+        api_module.Predictor,
+        "from_model_registry",
+        staticmethod(_from_registry),
+    )
+    monkeypatch.setattr(api_module.Predictor, "from_path", staticmethod(_from_path))
+
+    app = api_module.create_app(
+        model_path="unused",
+        serving_config={
+            **_serving_config(),
+            "preload_model_on_startup": True,
+            "model_registry": {
+                "enabled": True,
+                "model_name": "recsys-serving",
+                "model_alias": "Production",
+                "artifact_path": "registered_model",
+                "local_cache_dir": ".cache/recsys_registry",
+                "fallback_to_filesystem": False,
+            },
+        },
+        mlflow_config={},
+    )
+    with TestClient(app) as client:
+        health = client.get("/health")
+        assert health.status_code == 200
+        assert health.json()["status"] == "degraded"
+        assert health.json()["model_source"] == "unavailable"
+
+    assert calls["from_registry"] >= 1
+    assert calls["from_path"] == 0
+
+
 def test_registry_artifact_cache_reuses_download(tmp_path: Path) -> None:
     class _FakeClient:
         def __init__(self, source: Path) -> None:
@@ -301,6 +350,7 @@ def test_deploy_pin_env_overrides_alias_selection(monkeypatch) -> None:
         health = client.get("/health")
 
     assert health.status_code == 200
+    assert health.json()["run_id"] == "run-99"
     assert captured["model_name"] == "recsys-serving"
     assert captured["model_version"] == "99"
     assert captured["run_id"] == "run-99"

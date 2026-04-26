@@ -101,9 +101,7 @@ def create_app(
     preload_on_startup = bool(config_serving.get("preload_model_on_startup", True))
     security_settings = SecuritySettings.from_serving_config(config_serving)
     verify_api_key = auth_dependency(security_settings)
-    resolved_model_path = str(
-        model_path or config_serving.get("model_path") or _resolve_model_path()
-    )
+
     app = FastAPI(
         title="RecSys API",
         version="0.1.0",
@@ -230,13 +228,16 @@ def create_app(
                 if not bool(registry_cfg.get("fallback_to_filesystem", True)):
                     raise
 
+        resolved_model_path = _resolve_model_path(
+            explicit_model_path=model_path,
+            serving_config=config_serving,
+        )
         predictor = Predictor.from_path(resolved_model_path)
         return predictor, {
             "source": "filesystem",
             "artifact_path": resolved_model_path,
             "model_name": "",
             "model_version": "",
-            "model_alias": "",
             "run_id": "",
         }
 
@@ -535,13 +536,31 @@ def main() -> None:
     )
 
 
-def _resolve_model_path() -> str:
-    if os.getenv("RECSYS_MODEL_PATH"):
-        return os.environ["RECSYS_MODEL_PATH"]
+def _resolve_model_path(
+    *,
+    explicit_model_path: str | Path | None = None,
+    serving_config: dict[str, Any] | None = None,
+) -> str:
+    env_path = os.getenv("RECSYS_MODEL_PATH", "").strip()
+    if env_path:
+        return env_path
+    if explicit_model_path:
+        return str(explicit_model_path)
+    cfg_path = (
+        str((serving_config or {}).get("model_path", "")).strip()
+        if isinstance(serving_config, dict)
+        else ""
+    )
+    if cfg_path:
+        return cfg_path
     if DEFAULT_CONFIG_PATH.exists():
         config = load_config(DEFAULT_CONFIG_PATH)
-        return config.get("serving", {}).get("model_path", "models/trained/latest/")
-    return "models/trained/latest/"
+        discovered = str(config.get("serving", {}).get("model_path", "")).strip()
+        if discovered:
+            return discovered
+    raise ValueError(
+        "Filesystem model loading requested, but no serving.model_path was configured."
+    )
 
 
 def _deploy_registry_overrides() -> dict[str, str]:
@@ -559,8 +578,7 @@ def _model_status_payload(status: str, meta: dict[str, str]) -> dict[str, str]:
         "model_source": meta.get("source", ""),
         "model_name": meta.get("model_name", ""),
         "model_version": meta.get("model_version", ""),
-        "model_alias": meta.get("model_alias", ""),
-        "cache_hit": meta.get("cache_hit", ""),
+        "run_id": meta.get("run_id", ""),
     }
 
 

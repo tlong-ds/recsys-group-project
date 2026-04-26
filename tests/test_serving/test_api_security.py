@@ -82,7 +82,7 @@ def test_health_is_public_and_sanitized(monkeypatch) -> None:
     body = response.json()
     assert body["status"] == "ok"
     assert "model_path" not in body
-    assert "run_id" not in body
+    assert "run_id" in body
     assert "error" not in body
 
 

@@ -74,7 +74,7 @@ def test_ready_returns_success_without_exposing_sensitive_metadata(monkeypatch) 
     body = response.json()
     assert body["status"] == "ready"
     assert "model_path" not in body
-    assert "run_id" not in body
+    assert "run_id" in body
     assert "error" not in body
 
 

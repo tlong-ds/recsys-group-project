@@ -112,91 +112,38 @@ jobs:
 
       - name: Resolve production model pin
         id: model_pin
-        env:
-          PYTHONPATH: src
-          DAGSHUB_USER_TOKEN: ${{ secrets.DAGSHUB_USER_TOKEN }}
         run: |
           python - <<'PY'
+          import json
           import os
-          from mlflow.exceptions import RestException
-          from mlflow.tracking import MlflowClient
-          from recsys.training.tracking import configure_tracking
-          from recsys.utils.config import load_config
+          from pathlib import Path
 
-          cfg = load_config("configs/serving_config.yaml")
-          serving_cfg = cfg.get("serving", {})
-          registry_cfg = serving_cfg.get("model_registry", {})
-          mlflow_cfg = cfg.get("mlflow", {})
-
-          model_name = str(registry_cfg.get("model_name", "recsys-serving"))
-          model_alias = str(registry_cfg.get("model_alias", "Production")).strip()
-          model_version = str(registry_cfg.get("model_version", "")).strip()
-
-          configure_tracking({"mlflow": mlflow_cfg})
-          client = MlflowClient()
-
-          def _warn(message: str) -> None:
-              print(f"::warning::{message}")
-
-          def _is_alias_resolution_error(exc: RestException) -> bool:
-              error_code = str(getattr(exc, "error_code", "")).upper()
-              payload = str(exc).upper()
-              return (
-                  "INVALID_PARAMETER_VALUE" in error_code
-                  or "RESOURCE_DOES_NOT_EXIST" in error_code
-                  or "INVALID_PARAMETER_VALUE" in payload
-                  or "RESOURCE_DOES_NOT_EXIST" in payload
+          promotion_path = Path("metrics/promotion_result.json")
+          if not promotion_path.exists():
+              raise RuntimeError(
+                  "Missing metrics/promotion_result.json. Run promotion stage before deploy."
               )
 
-          def _latest_version_by_name(name: str):
-              versions = client.search_model_versions(f"name='{name}'")
-              if not versions:
-                  _warn(
-                      "No MLflow model version exists for "
-                      f"'{name}'. Deploying now would leave recsys-api unable "
-                      "to load a model and the app will not work. "
-                      "Train/register a model first, then redeploy."
-                  )
-                  raise RuntimeError(
-                      f"No registered MLflow model versions found for model '{name}'."
-                  )
-              return max(versions, key=lambda candidate: int(candidate.version))
+          payload = json.loads(promotion_path.read_text(encoding="utf-8"))
+          if not isinstance(payload, dict):
+              raise ValueError("promotion_result.json must be a JSON object.")
 
-          resolved_by = ""
-          if model_alias:
-              try:
-                  version = client.get_model_version_by_alias(model_name, model_alias)
-                  resolved_by = f"alias={model_alias}"
-              except RestException as exc:
-                  if not _is_alias_resolution_error(exc):
-                      raise
-                  if model_version:
-                      version = client.get_model_version(model_name, model_version)
-                      resolved_by = (
-                          f"version={model_version} (alias '{model_alias}' unavailable)"
-                      )
-                  else:
-                      version = _latest_version_by_name(model_name)
-                      resolved_by = (
-                          f"latest version fallback (alias '{model_alias}' unavailable)"
-                      )
-          elif model_version:
-              version = client.get_model_version(model_name, model_version)
-              resolved_by = f"version={model_version}"
-          else:
-              version = _latest_version_by_name(model_name)
-              resolved_by = "latest version fallback (no alias configured)"
+          model_name = str(payload.get("model_name", "")).strip()
+          model_version = str(payload.get("model_version", "")).strip()
+          run_id = str(payload.get("run_id", "")).strip()
+          if not model_name or not model_version or not run_id:
+              raise ValueError(
+                  "promotion_result.json must include model_name/model_version/run_id."
+              )
 
-          model_version = str(version.version)
-          run_id = str(version.run_id)
+          if model_name != "recsys-serving":
+              raise ValueError(
+                  "promotion_result.json model_name must be 'recsys-serving' for deploy."
+              )
 
-          print(
-              f"Resolved {model_name} using {resolved_by} -> "
-              f"version={model_version}, run_id={run_id}"
-          )
+          print(f"Resolved deployment pin from promotion_result.json: {payload}")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
               handle.write(f"model_name={model_name}\n")
-              handle.write(f"model_alias={model_alias}\n")
               handle.write(f"model_version={model_version}\n")
               handle.write(f"run_id={run_id}\n")
           PY

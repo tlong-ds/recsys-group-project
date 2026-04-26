@@ -2,7 +2,6 @@ serving:
   host: 0.0.0.0
   port: 8000
   reload: false
-  model_path: models/trained/latest/
   preload_model_on_startup: true
   default_top_k: 10
   security:
@@ -20,7 +19,7 @@ serving:
     model_version: ""
     artifact_path: registered_model
     local_cache_dir: /app/models/cache
-    fallback_to_filesystem: true
+    fallback_to_filesystem: false
 
 mlflow:
   enabled: true

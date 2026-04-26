@@ -52,6 +52,7 @@ recsys-train = "recsys.training.pipeline:main"
 recsys-serve = "recsys.serving.api:main"
 recsys-process-data = "recsys.data.pipeline:main"
 recsys-ct-promote = "recsys.training.ct_promote:main"
+recsys-promote-best = "recsys.training.select_model:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

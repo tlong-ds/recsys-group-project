@@ -19,11 +19,9 @@ cp .env.example .env
 docker compose up -d --build api
 ```
 
-The default serving config points at `models/trained/latest/`. If you want to
-serve one of the checked-in versioned artifacts, set `serving.model_path` in
-`configs/serving_config.yaml` to an existing directory such as
-`models/trained/v1_strict_filter/latest/` before starting the API, or enable
-MLflow registry loading and configure the target model alias/version.
+The default serving config is registry-first and expects a promoted canonical
+model in MLflow (`recsys-serving`). Filesystem model paths are only a legacy
+fallback option and are disabled by default.
 
 To enable local observability:
 ```bash
@@ -76,8 +74,9 @@ docker pull ghcr.io/<owner>/<repo>:main
 For production, prefer MLflow Model Registry as the deployment source of truth:
 1. Train and log run artifacts with MLflow.
 2. Register the run model in MLflow Model Registry.
-3. Promote the selected version by alias (for example `Production`).
-4. Configure serving with `serving.model_registry.enabled=true` and the target alias/version.
+3. Promote the selected winner into canonical model `recsys-serving` and point alias `Production`.
+4. Write `metrics/promotion_result.json` with deploy pin triplet (`model_name`, `model_version`, `run_id`).
+5. Configure serving with `serving.model_registry.enabled=true` and `fallback_to_filesystem=false`.
 
 Required runtime secrets/environment:
 - `RECSYS_API_KEYS` (comma-separated API keys for serving auth)
