@@ -12,11 +12,23 @@ locals {
   # Construct OIDC ARN manually to avoid iam:ListOpenIDConnectProviders permission issues
   oidc_issuer       = data.aws_eks_cluster.this.identity[0].oidc[0].issuer
   oidc_provider_url = replace(local.oidc_issuer, "https://", "")
-  oidc_provider_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${local.oidc_provider_url}"
+  oidc_provider_arn = aws_iam_openid_connect_provider.eks.arn
 }
 
 data "aws_eks_cluster" "this" {
   name = var.eks_cluster_name
+}
+
+data "tls_certificate" "eks" {
+  url = data.aws_eks_cluster.this.identity[0].oidc[0].issuer
+}
+
+resource "aws_iam_openid_connect_provider" "eks" {
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = [data.tls_certificate.eks.certificates[0].sha1_fingerprint]
+  url             = data.aws_eks_cluster.this.identity[0].oidc[0].issuer
+
+  tags = local.tags
 }
 
 ################################################################################

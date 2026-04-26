@@ -11,6 +11,23 @@ Currently, two official plugins are available:
 
 The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
+## Deployment
+
+### Cloudflare Pages (Recommended)
+
+To deploy the frontend to Cloudflare Pages:
+
+1.  **Redirects**: Ensure `public/_redirects` contains your AWS ALB address:
+    ```text
+    /api/* http://k8s-recsys-815ed517db-1580135138.ap-southeast-1.elb.amazonaws.com/:splat 200
+    ```
+2.  **Environment Variables**: Add `VITE_RECSYS_API_KEY` in the Cloudflare Pages dashboard.
+3.  **Build Settings**:
+    - **Framework preset**: `Vite`
+    - **Build command**: `npm run build`
+    - **Build output directory**: `dist`
+    - **Root directory**: `frontend`
+
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
