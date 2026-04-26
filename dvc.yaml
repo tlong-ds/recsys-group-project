@@ -826,13 +826,23 @@ stages:
       - metrics/experiments/${item.data_version}/${item.model_profile}/evaluation_metrics.json:
           cache: false
 
-  select_best_model:
-    cmd: python -m recsys.training.select_model
+  select_and_promote_best_model:
+    cmd: >
+      python -m recsys.training.select_model
+      --training-config configs/training_config.yaml
+      --best-model-path metrics/best_model.json
+      --experiments-root metrics/experiments
+      --output-path metrics/promotion_result.json
+      --canonical-model-name recsys-serving
+      --target-alias Production
     deps:
       - src/recsys/training/select_model.py
+      - src/recsys/training/tracking.py
+      - src/recsys/utils/config.py
+      - configs/training_config.yaml
       - metrics/experiments
     outs:
       - metrics/best_model.json:
           cache: false
-      - models/trained/latest:
-          cache: true
+      - metrics/promotion_result.json:
+          cache: false
