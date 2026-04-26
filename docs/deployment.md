@@ -262,11 +262,13 @@ scripts/verify_model_prewarm_rollout.sh \
 
 2. **Release / rollback**
    - Deploy via GitHub Actions `deploy-eks` workflow.
-   - Rollback app quickly with:
-     ```bash
-     kubectl -n recsys rollout undo deployment/recsys-api
-     kubectl -n recsys rollout status deployment/recsys-api
-     ```
+   - **Rollback app (Image Tag)**:
+     - Use `kubectl -n recsys rollout undo deployment/recsys-api` for immediate revert.
+     - Alternatively, use the `deploy-eks` workflow with a specific `image_tag` (e.g., `sha-<short_sha>`) from the **Actions** tab.
+   - **Rollback model (Model Version)**:
+     1. Revert the `Production` alias in the MLflow Model Registry.
+     2. Update `metrics/promotion_result.json` in the `main` branch with the previous stable `model_version` and `run_id`.
+     3. Re-trigger `deploy-eks` to apply the pinned model rollback.
    - If infra changes caused issues, revert Terraform module inputs and re-apply.
 
 3. **CT promotion controls**

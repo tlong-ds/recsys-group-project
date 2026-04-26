@@ -141,6 +141,12 @@ jobs:
                   "promotion_result.json model_name must be 'recsys-serving' for deploy."
               )
 
+          if not model_version.isdigit():
+              raise ValueError(f"model_version must be a digit string, got: {model_version}")
+
+          if len(run_id) < 8:
+              raise ValueError(f"run_id seems too short or invalid: {run_id}")
+
           print(f"Resolved deployment pin from promotion_result.json: {payload}")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
               handle.write(f"model_name={model_name}\n")
@@ -225,3 +231,37 @@ jobs:
           kubectl -n recsys rollout status deployment/recsys-api --timeout=10m
           kubectl -n recsys rollout status deployment/prometheus --timeout=5m
           kubectl -n recsys rollout status deployment/grafana --timeout=5m
+
+      - name: Post-deploy smoke checks
+        env:
+          RECSYS_API_KEYS: ${{ secrets.RECSYS_API_KEYS }}
+        run: |
+          # Get Ingress hostname
+          log() { echo "[smoke-gate] $*"; }
+          
+          log "Resolving ingress hostname (mandatory for production gate)..."
+          # Retry for up to 5 minutes (30 * 10s) as ALBs can take time to provision/update
+          INGRESS_HOST=""
+          for i in {1..30}; do
+            INGRESS_HOST=$(kubectl -n recsys get ingress recsys-api -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "")
+            if [[ -n "$INGRESS_HOST" ]]; then 
+              log "  Successfully resolved ingress: $INGRESS_HOST"
+              break
+            fi
+            log "  Waiting for ingress hostname (attempt $i/30)..."
+            sleep 10
+          done
+
+          if [[ -z "$INGRESS_HOST" ]]; then
+            die "ERROR: Could not resolve ingress hostname after 5 minutes. Smoke tests cannot proceed against the public endpoint."
+          fi
+
+          API_URL="http://${INGRESS_HOST}"
+
+          # Extract the first API key
+          FIRST_KEY=$(echo "$RECSYS_API_KEYS" | cut -d',' -f1)
+
+          log "Running smoke tests against $API_URL"
+          ./scripts/smoke_test.sh --url "$API_URL" --api-key "$FIRST_KEY" --timeout 60
+
+          log "Smoke tests passed successfully against public endpoint."
