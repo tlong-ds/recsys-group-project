@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
 import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+import asyncpg
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     Counter,
@@ -21,16 +24,29 @@ from prometheus_client import (
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from recsys.serving.predictor import Predictor
-from recsys.serving.schemas import RecommendRequest, RecommendResponse
+from recsys.serving.schemas import (
+    EvaluationsResponse,
+    ModelMetrics,
+    PaginatedProductsResponse,
+    ProductInfo,
+    RecommendRequest,
+    RecommendResponse,
+    ViewLog,
+)
 from recsys.serving.security import (
     BodySizeLimitMiddleware,
     SecuritySettings,
     auth_dependency,
 )
 from recsys.utils.config import load_config
+from dotenv import load_dotenv
+
+load_dotenv()
 
 DEFAULT_CONFIG_PATH = Path("configs/serving_config.yaml")
 CONFIG_ENV_VAR = "RECSYS_SERVING_CONFIG"
+DB_URL = os.getenv("NEON_DB_URL")
+
 
 # Custom metrics
 RECSYS_RECOMMENDATIONS_TOTAL = Counter(
@@ -100,9 +116,75 @@ def create_app(
         BodySizeLimitMiddleware,
         max_body_bytes=security_settings.max_body_bytes,
     )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     # Instrument with Prometheus
     Instrumentator().instrument(app)
+
+    @app.on_event("startup")
+    async def startup_event() -> None:
+        # Initialize DB pool for async operations
+        app.state.pool = await asyncpg.create_pool(DB_URL)
+        app.state.view_queue = asyncio.Queue()
+        
+        # Start background writer task for high-throughput views
+        asyncio.create_task(batch_writer_task(app))
+        
+        if preload_on_startup:
+            preload_model()
+
+    @app.on_event("shutdown")
+    async def shutdown_event() -> None:
+        if hasattr(app.state, "pool"):
+            await app.state.pool.close()
+
+    async def batch_writer_task(app: FastAPI) -> None:
+        """Background task to batch write user views to DB without blocking the API."""
+        while True:
+            batch = []
+            try:
+                # Wait for first item to arrive
+                view = await app.state.view_queue.get()
+                batch.append(view)
+                
+                # Collect more items for up to 1 second or until batch size 1000
+                start_collect = time.time()
+                while len(batch) < 1000 and (time.time() - start_collect) < 1.0:
+                    try:
+                        view = app.state.view_queue.get_nowait()
+                        batch.append(view)
+                    except asyncio.QueueEmpty:
+                        await asyncio.sleep(0.1)
+                
+                if batch:
+                    async with app.state.pool.acquire() as conn:
+                        query = (
+                            'INSERT INTO user_views ("sessionId", "userId", "itemId", timeframe, eventdate) '
+                            "VALUES ($1, $2, $3, $4, $5)"
+                        )
+                        values = [
+                            (
+                                v.sessionId, 
+                                v.userId, 
+                                v.itemId, 
+                                v.timeframe or int(time.time() * 1000),
+                                v.eventdate or time.strftime("%Y-%m-%d")
+                            )
+                            for v in batch
+                        ]
+                        await conn.executemany(query, values)
+            except Exception as e:
+                # In production, use structured logging here
+                print(f"Error in batch_writer_task: {e}")
+            
+            # Yield control to prevent CPU spinning if queue was empty
+            await asyncio.sleep(0.5)
 
     @app.get("/metrics", include_in_schema=False)
     def metrics(_: str | None = Depends(verify_api_key)) -> Response:
@@ -181,9 +263,112 @@ def create_app(
                 detail="Model unavailable.",
             ) from exc
 
+    @app.get("/evaluations", response_model=EvaluationsResponse)
+    def get_evaluations() -> EvaluationsResponse:
+        import json
+        
+        experiments_dir = Path("models/experiments")
+        results: list[ModelMetrics] = []
+        if not experiments_dir.exists():
+            return EvaluationsResponse(metrics=results)
+        
+        for data_version_dir in experiments_dir.iterdir():
+            if not data_version_dir.is_dir():
+                continue
+            for model_dir in data_version_dir.iterdir():
+                if not model_dir.is_dir():
+                    continue
+                metrics_file = model_dir / "latest" / "metrics.json"
+                if metrics_file.exists():
+                    try:
+                        with open(metrics_file) as f:
+                            metrics = json.load(f)
+                        
+                        profile = model_dir.name.upper()
+                        if profile.startswith("SRGNN_"):
+                            profile = f"SR-GNN ({profile.split('_')[1].upper()})"
+                        elif profile == "SRGNN":
+                            profile = "SR-GNN"
+                        elif profile == "TAGNN":
+                            profile = "TAGNN"
+                        elif profile == "GGNN":
+                            profile = "GGNN"
+                        
+                        results.append(ModelMetrics(
+                            profile=profile,
+                            dataVersion=data_version_dir.name,
+                            hrAtK=metrics.get("hr@k", 0.0),
+                            mrrAtK=metrics.get("mrr@k", 0.0)
+                        ))
+                    except Exception:
+                        pass
+        
+        return EvaluationsResponse(metrics=results)
+
+    @app.get("/products", response_model=PaginatedProductsResponse)
+    async def get_products(
+        page: int = 1,
+        page_size: int = 20,
+        category_id: int | None = None
+    ) -> PaginatedProductsResponse:
+        """Fetch the product catalog from the database with offset-based pagination."""
+        async with app.state.pool.acquire() as conn:
+            where_clauses = []
+            params = []
+            
+            if category_id is not None:
+                where_clauses.append(f'pc."categoryId" = ${len(params) + 1}')
+                params.append(category_id)
+                
+            where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+            
+            # Get total count for pagination metadata
+            count_query = (
+                f'SELECT COUNT(*) FROM products p '
+                f'JOIN product_categories pc ON p."itemId" = pc."itemId" '
+                f'{where_sql}'
+            )
+            total_count = await conn.fetchval(count_query, *params)
+            
+            offset = (page - 1) * page_size
+            limit_param = f"${len(params) + 1}"
+            params.append(page_size)
+            offset_param = f"${len(params) + 1}"
+            params.append(offset)
+            
+            query = (
+                f'SELECT p."itemId" as "id", pc."categoryId" as "categoryId", p.product_name_tokens as "name", (POWER(2, p.pricelog2) - 1) as "price" '
+                f'FROM products p '
+                f'JOIN product_categories pc ON p."itemId" = pc."itemId" '
+                f'{where_sql} '
+                f'ORDER BY p."itemId" ASC '
+                f'LIMIT {limit_param} OFFSET {offset_param}'
+            )
+            
+            rows = await conn.fetch(query, *params)
+            items = [ProductInfo(**dict(row)) for row in rows]
+            
+            # In offset-based, we return next_page instead of cursor
+            next_page = page + 1 if offset + len(items) < total_count else None
+            total_pages = (total_count + page_size - 1) // page_size
+            
+            return PaginatedProductsResponse(
+                items=items, 
+                total_pages=total_pages,
+                current_page=page,
+                next_cursor=next_page
+            )
+
+    @app.post("/views", status_code=202)
+    async def log_view(view: ViewLog) -> dict[str, str]:
+        """Asynchronously log a user item view to the batch queue."""
+        await app.state.view_queue.put(view)
+        return {"status": "accepted"}
+
     @app.post("/recommend", response_model=RecommendResponse)
-    def recommend(
+    async def recommend(
         request: RecommendRequest,
+        api_request: Request,
         _: str | None = Depends(verify_api_key),
     ) -> RecommendResponse:
         latency_start: float | None = None
@@ -203,6 +388,48 @@ def create_app(
                 request.item_sequence,
                 top_k=request.top_k,
             )
+            
+            # Fetch metadata for recommendations
+            recommended_products = []
+            if recommendations:
+                try:
+                    async with api_request.app.state.pool.acquire() as conn:
+                        rows = await conn.fetch(
+                            'SELECT p."itemId" as "id", pc."categoryId" as "categoryId", p.product_name_tokens as "name", (POWER(2, p.pricelog2) - 1) as "price" '
+                            'FROM products p '
+                            'JOIN product_categories pc ON p."itemId" = pc."itemId" '
+                            'WHERE p."itemId" = ANY($1)',
+                            recommendations
+                        )
+                        # Debug logging to investigate missing metadata
+                        print(f"DEBUG: Found {len(rows)} metadata rows for {len(recommendations)} recommendations")
+                        if rows:
+                            print(f"DEBUG: First row keys: {list(rows[0].keys())}")
+                        
+                        # Maintain order of recommendations
+                        metadata_map = {row['id']: row for row in rows}
+                        for r_id in recommendations:
+                            if r_id in metadata_map:
+                                row = metadata_map[r_id]
+                                recommended_products.append(ProductInfo(
+                                    id=row['id'],
+                                    categoryId=row['categoryId'],
+                                    name=row['name'],
+                                    price=row['price']
+                                ))
+                            else:
+                                # Fallback if metadata missing
+                                recommended_products.append(ProductInfo(
+                                    id=r_id,
+                                    categoryId=0,
+                                    name=f"Product {r_id}",
+                                    price=0.0
+                                ))
+                except Exception as db_err:
+                    print(f"Error fetching metadata for recommendations: {db_err}")
+                    # Fallback to simple list if DB fails
+                    recommended_products = [ProductInfo(id=r_id, categoryId=0, name=f"Product {r_id}", price=0.0) for r_id in recommendations]
+
             # Track business metrics
             RECSYS_RECOMMENDATIONS_TOTAL.inc()
             RECSYS_RECOMMENDATION_REQUESTS_TOTAL.labels(status="success").inc()
@@ -228,6 +455,7 @@ def create_app(
             session_id=request.session_id,
             item_sequence=request.item_sequence,
             recommendations=recommendations,
+            recommended_products=recommended_products
         )
 
     return app
