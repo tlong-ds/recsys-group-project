@@ -150,7 +150,7 @@ Recommended grading demo sequence:
 ```bash
 python -m pytest -q
 dvc stage list
-export RECSYS_API_KEYS=local-dev-key
+export RECSYS_API_KEYS=<your-api-key>
 python -m recsys.serving.api \
   --config configs/serving_config.yaml \
   --model-path models/trained/v1_strict_filter/latest/
@@ -161,7 +161,7 @@ In another terminal:
 ```bash
 curl http://localhost:8000/health
 curl http://localhost:8000/ready
-curl -H "Authorization: Bearer local-dev-key" \
+curl -H "Authorization: Bearer <your-api-key>" \
   -H "Content-Type: application/json" \
   -d '{"item_sequence":[101,205,330],"top_k":10}' \
   http://localhost:8000/recommend

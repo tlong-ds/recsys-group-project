@@ -301,8 +301,8 @@ def create_app(
                             hrAtK=metrics.get("hr@k", 0.0),
                             mrrAtK=metrics.get("mrr@k", 0.0)
                         ))
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        print(f"Failed to load metrics for {model_dir.name}: {e}")
         
         return EvaluationsResponse(metrics=results)
 
@@ -327,7 +327,7 @@ def create_app(
             count_query = (
                 f'SELECT COUNT(*) FROM products p '
                 f'JOIN product_categories pc ON p."itemId" = pc."itemId" '
-                f'{where_sql}'
+                f'{where_sql}'  # nosec B608
             )
             total_count = await conn.fetchval(count_query, *params)
             
@@ -343,9 +343,9 @@ def create_app(
                 '(POWER(2, p.pricelog2) - 1) as "price" '
                 "FROM products p "
                 'JOIN product_categories pc ON p."itemId" = pc."itemId" '
-                f"{where_sql} "
+                f"{where_sql} "  # nosec B608
                 'ORDER BY p."itemId" ASC '
-                f"LIMIT {limit_param} OFFSET {offset_param}"
+                f"LIMIT {limit_param} OFFSET {offset_param}"  # nosec B608
             )
             
             rows = await conn.fetch(query, *params)

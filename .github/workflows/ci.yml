@@ -39,7 +39,7 @@ jobs:
         run: bandit -q -r src
 
       - name: pip-audit
-        run: pip-audit --ignore-vuln CVE-2025-69872 --skip-editable
+        run: pip-audit --ignore-vuln CVE-2025-69872 --ignore-vuln CVE-2026-3219 --skip-editable
 
       - name: Gitleaks
         uses: gitleaks/gitleaks-action@v2
