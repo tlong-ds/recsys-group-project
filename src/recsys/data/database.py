@@ -1,9 +1,10 @@
 import os
+
 import pandas as pd
-from sqlalchemy import create_engine, Column, Integer, String, Float, BigInteger
+from dotenv import load_dotenv
+from sqlalchemy import BigInteger, Column, Float, Integer, String, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -49,13 +50,19 @@ def ingest_data(engine):
     print("Ingesting products.csv (raw)...")
     products_df = pd.read_csv('data/raw/products.csv', sep=';')
     # Map dot-notation column to SQL-safe name
-    products_df = products_df.rename(columns={'product.name.tokens': 'product_name_tokens'})
+    products_df = products_df.rename(
+        columns={"product.name.tokens": "product_name_tokens"}
+    )
     # _id is autoincremented by DB, so we don't provide it in the dataframe
-    products_df.to_sql('products', engine, if_exists='append', index=False, chunksize=1000)
+    products_df.to_sql(
+        "products", engine, if_exists="append", index=False, chunksize=1000
+    )
 
     print("Ingesting product-categories.csv (raw)...")
-    categories_df = pd.read_csv('data/raw/product-categories.csv', sep=';')
-    categories_df.to_sql('product_categories', engine, if_exists='append', index=False, chunksize=1000)
+    categories_df = pd.read_csv("data/raw/product-categories.csv", sep=";")
+    categories_df.to_sql(
+        "product_categories", engine, if_exists="append", index=False, chunksize=1000
+    )
     
     print("Ingestion complete.")
 
@@ -68,5 +75,8 @@ if __name__ == "__main__":
     session = Session()
     product_count = session.query(Product).count()
     category_count = session.query(ProductCategory).count()
-    print(f"Verified: {product_count} products and {category_count} categories uploaded to Neon.")
+    print(
+        f"Verified: {product_count} products and {category_count} categories "
+        "uploaded to Neon."
+    )
     session.close()

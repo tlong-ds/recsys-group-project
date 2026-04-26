@@ -1,8 +1,8 @@
 import glob
 import json
+import logging
 import os
 import shutil
-import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ def select_best_model():
 
     for f in metrics_files:
         try:
-            with open(f, 'r') as jf:
+            with open(f) as jf:
                 data = json.load(jf)
                 # Assume Recall@20 is the primary metric
                 recall = data.get('Recall@20', 0)
@@ -40,7 +40,8 @@ def select_best_model():
         return
 
     # Determine paths
-    # If experiments: metrics/experiments/<data_version>/<model_profile>/evaluation_metrics.json
+    # If experiments:
+    # metrics/experiments/<data_version>/<model_profile>/evaluation_metrics.json
     # If baseline: metrics/baseline/evaluation_metrics.json
     parts = best_file.split(os.sep)
     if 'experiments' in parts:
@@ -65,7 +66,9 @@ def select_best_model():
     with open('metrics/best_model.json', 'w') as f:
         json.dump(summary, f, indent=4)
     
-    logger.info(f"Best model: {data_version}/{model_profile} (Recall@20: {best_recall})")
+    logger.info(
+        f"Best model: {data_version}/{model_profile} (Recall@20: {best_recall})"
+    )
 
     # Copy to latest
     target_dir = "models/trained/latest"

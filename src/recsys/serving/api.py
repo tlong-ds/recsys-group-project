@@ -12,6 +12,7 @@ from typing import Any
 
 import asyncpg
 import uvicorn
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import (
@@ -39,7 +40,6 @@ from recsys.serving.security import (
     auth_dependency,
 )
 from recsys.utils.config import load_config
-from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -165,7 +165,8 @@ def create_app(
                 if batch:
                     async with app.state.pool.acquire() as conn:
                         query = (
-                            'INSERT INTO user_views ("sessionId", "userId", "itemId", timeframe, eventdate) '
+                            "INSERT INTO user_views "
+                            '("sessionId", "userId", "itemId", timeframe, eventdate) '
                             "VALUES ($1, $2, $3, $4, $5)"
                         )
                         values = [
@@ -337,12 +338,14 @@ def create_app(
             params.append(offset)
             
             query = (
-                f'SELECT p."itemId" as "id", pc."categoryId" as "categoryId", p.product_name_tokens as "name", (POWER(2, p.pricelog2) - 1) as "price" '
-                f'FROM products p '
-                f'JOIN product_categories pc ON p."itemId" = pc."itemId" '
-                f'{where_sql} '
-                f'ORDER BY p."itemId" ASC '
-                f'LIMIT {limit_param} OFFSET {offset_param}'
+                'SELECT p."itemId" as "id", pc."categoryId" as "categoryId", '
+                'p.product_name_tokens as "name", '
+                '(POWER(2, p.pricelog2) - 1) as "price" '
+                "FROM products p "
+                'JOIN product_categories pc ON p."itemId" = pc."itemId" '
+                f"{where_sql} "
+                'ORDER BY p."itemId" ASC '
+                f"LIMIT {limit_param} OFFSET {offset_param}"
             )
             
             rows = await conn.fetch(query, *params)
@@ -366,7 +369,9 @@ def create_app(
             app.state.view_queue.put_nowait(view)
             return {"status": "accepted"}
         except asyncio.QueueFull:
-            raise HTTPException(status_code=503, detail="Server is too busy to process view logs.")
+            raise HTTPException(
+                status_code=503, detail="Server is too busy to process view logs."
+            )
 
     @app.post("/recommend", response_model=RecommendResponse)
     async def recommend(
@@ -398,14 +403,20 @@ def create_app(
                 try:
                     async with api_request.app.state.pool.acquire() as conn:
                         rows = await conn.fetch(
-                            'SELECT p."itemId" as "id", pc."categoryId" as "categoryId", p.product_name_tokens as "name", (POWER(2, p.pricelog2) - 1) as "price" '
-                            'FROM products p '
+                            'SELECT p."itemId" as "id", pc."categoryId" '
+                            'as "categoryId", '
+                            'p.product_name_tokens as "name", '
+                            '(POWER(2, p.pricelog2) - 1) as "price" '
+                            "FROM products p "
                             'JOIN product_categories pc ON p."itemId" = pc."itemId" '
                             'WHERE p."itemId" = ANY($1)',
-                            recommendations
+                            recommendations,
                         )
                         # Debug logging to investigate missing metadata
-                        print(f"DEBUG: Found {len(rows)} metadata rows for {len(recommendations)} recommendations")
+                        print(
+                            f"DEBUG: Found {len(rows)} metadata rows for "
+                            f"{len(recommendations)} recommendations"
+                        )
                         if rows:
                             print(f"DEBUG: First row keys: {list(rows[0].keys())}")
                         
@@ -431,7 +442,12 @@ def create_app(
                 except Exception as db_err:
                     print(f"Error fetching metadata for recommendations: {db_err}")
                     # Fallback to simple list if DB fails
-                    recommended_products = [ProductInfo(id=r_id, categoryId=0, name=f"Product {r_id}", price=0.0) for r_id in recommendations]
+                    recommended_products = [
+                        ProductInfo(
+                            id=r_id, categoryId=0, name=f"Product {r_id}", price=0.0
+                        )
+                        for r_id in recommendations
+                    ]
 
             # Track business metrics
             RECSYS_RECOMMENDATIONS_TOTAL.inc()
