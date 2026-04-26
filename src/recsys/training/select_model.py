@@ -55,7 +55,9 @@ def _discover_evaluation_metrics(metrics_root: Path) -> list[Path]:
     return sorted(metrics_root.glob("*/*/evaluation_metrics.json"))
 
 
-def _parse_experiment_identifiers(metrics_root: Path, metrics_path: Path) -> tuple[str, str]:
+def _parse_experiment_identifiers(
+    metrics_root: Path, metrics_path: Path
+) -> tuple[str, str]:
     # Expected pattern:
     # metrics/experiments/<data_version>/<model_profile>/evaluation_metrics.json
     rel = metrics_path.relative_to(metrics_root)
@@ -150,7 +152,8 @@ def _extract_registry_metadata(
     source_uri = str(registry_info.get("source", "")).strip()
     if not source_model_name or not source_model_version or not source_run_id:
         raise ValueError(
-            "model_registry metadata must include model_name, model_version, and run_id."
+            "model_registry metadata must include model_name, "
+            "model_version, and run_id."
         )
     if not source_uri:
         raise ValueError("model_registry metadata must include source artifact URI.")
@@ -222,7 +225,9 @@ def promote_best_model(
     data_version = str(winner.get("data_version", "")).strip()
     model_profile = str(winner.get("model_profile", "")).strip()
     if not data_version or not model_profile:
-        raise ValueError("best_model must include non-empty data_version/model_profile.")
+        raise ValueError(
+            "best_model must include non-empty data_version/model_profile."
+        )
 
     training_metrics_path = (
         Path(experiments_root) / data_version / model_profile / "training_metrics.json"

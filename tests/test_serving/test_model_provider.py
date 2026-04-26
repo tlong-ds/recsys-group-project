@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -14,7 +13,9 @@ class _StubPredictor:
     def __init__(self, tag: str = "stub") -> None:
         self.tag = tag
 
-    def get_recommendations(self, item_sequence: list[int], top_k: int = 10) -> list[int]:
+    def get_recommendations(
+        self, item_sequence: list[int], top_k: int = 10
+    ) -> list[int]:
         return list(range(1, top_k + 1))
 
     def input_quality(self, item_sequence: list[int]) -> dict[str, int | float]:
@@ -27,7 +28,9 @@ class _StubPredictor:
         }
 
 
-def _make_provider(monkeypatch, *, serving_config: dict[str, Any] | None = None) -> ModelProvider:
+def _make_provider(
+    monkeypatch, *, serving_config: dict[str, Any] | None = None
+) -> ModelProvider:
     from recsys.serving import predictor as pred_mod
 
     monkeypatch.setattr(

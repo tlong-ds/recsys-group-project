@@ -35,7 +35,9 @@ def _read_best_model_selection(path: Path) -> tuple[str, str]:
     data_version = str(best_model.get("data_version", "")).strip()
     model_profile = str(best_model.get("model_profile", "")).strip()
     if not data_version or not model_profile:
-        raise ValueError("best_model must include non-empty data_version/model_profile.")
+        raise ValueError(
+            "best_model must include non-empty data_version/model_profile."
+        )
     return data_version, model_profile
 
 
@@ -107,9 +109,13 @@ def run_retrain_selected_model(
     data_version_config_path = data_version_config_root / f"{data_version}.yaml"
     model_profile_config_path = model_profile_config_root / f"{model_profile}.yaml"
     if not data_version_config_path.exists():
-        raise FileNotFoundError(f"Missing data-version config: {data_version_config_path}")
+        raise FileNotFoundError(
+            f"Missing data-version config: {data_version_config_path}"
+        )
     if not model_profile_config_path.exists():
-        raise FileNotFoundError(f"Missing model-profile config: {model_profile_config_path}")
+        raise FileNotFoundError(
+            f"Missing model-profile config: {model_profile_config_path}"
+        )
 
     config = _load_runtime_config(
         data_config_path=data_config_path,

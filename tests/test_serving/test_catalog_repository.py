@@ -9,7 +9,6 @@ import pytest
 from recsys.serving.catalog_repository import CatalogRepository, CatalogUnavailableError
 from recsys.serving.schemas import ProductInfo
 
-
 # ---------------------------------------------------------------------------
 # Stubs
 # ---------------------------------------------------------------------------

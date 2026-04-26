@@ -9,7 +9,6 @@ import pytest
 from recsys.serving.recommendation_service import RecommendationService
 from recsys.serving.schemas import ProductInfo
 
-
 # ---------------------------------------------------------------------------
 # Stubs
 # ---------------------------------------------------------------------------
@@ -20,7 +19,9 @@ class _StubPredictor:
         self._fail = fail
         self._item_to_idx = {1: 1, 2: 2, 3: 3}
 
-    def get_recommendations(self, item_sequence: list[int], top_k: int = 10) -> list[int]:
+    def get_recommendations(
+        self, item_sequence: list[int], top_k: int = 10
+    ) -> list[int]:
         if self._fail:
             raise RuntimeError("boom")
         return list(range(10, 10 + top_k))
@@ -53,11 +54,15 @@ class _StubCatalog:
     def __init__(self, *, fail: bool = False) -> None:
         self._fail = fail
 
-    async def fetch_product_metadata(self, item_ids: list[int]) -> dict[int, ProductInfo]:
+    async def fetch_product_metadata(
+        self, item_ids: list[int]
+    ) -> dict[int, ProductInfo]:
         if self._fail:
             raise RuntimeError("catalog down")
         return {
-            item_id: ProductInfo(id=item_id, categoryId=1, name=f"Item {item_id}", price=9.99)
+            item_id: ProductInfo(
+                id=item_id, categoryId=1, name=f"Item {item_id}", price=9.99
+            )
             for item_id in item_ids
         }
 

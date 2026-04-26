@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 
+import pytest
 from fastapi.testclient import TestClient
 
 from recsys.serving.predictor import Predictor
@@ -86,7 +87,7 @@ def test_recommend_records_online_monitoring_metrics(monkeypatch) -> None:
 def test_recommend_falls_back_when_catalog_metadata_lookup_fails(monkeypatch) -> None:
     app = _create_app(monkeypatch, lambda: _MonitoringPredictor())
     # Inject a failing pool into the catalog repository
-    catalog_repo_module = importlib.import_module("recsys.serving.catalog_repository")
+    importlib.import_module("recsys.serving.catalog_repository")
     # Access the catalog through the app's recommendation service
     # We need to set the pool on the catalog repository to a failing pool
     # The catalog is wired inside create_app, so we access it via the
@@ -94,7 +95,6 @@ def test_recommend_falls_back_when_catalog_metadata_lookup_fails(monkeypatch) ->
     # A simpler approach: find the CatalogRepository instance in the app closure.
     # Since the app's routes capture the `catalog` variable from create_app,
     # we can patch its _pool attribute.
-    from recsys.serving.catalog_repository import CatalogRepository
 
     # Walk the app routes to find the catalog reference
     # Instead, let's just patch the pool on the catalog object

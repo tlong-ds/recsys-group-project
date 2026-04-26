@@ -45,7 +45,9 @@ def test_run_retrain_selected_model_uses_selected_profile_and_train_plus_val(
     )
     _write_json(data_root / "item_vocab.json", {"item2id": {"11": 1, "12": 2}})
 
-    _write_yaml(tmp_path / "configs/data_config.yaml", {"data": {"processed_path": "x"}})
+    _write_yaml(
+        tmp_path / "configs/data_config.yaml", {"data": {"processed_path": "x"}}
+    )
     _write_yaml(
         tmp_path / "configs/training_config.yaml",
         {"training": {"num_epochs": 2}, "mlflow": {"enabled": False}},
@@ -103,7 +105,8 @@ def test_run_retrain_selected_model_uses_selected_profile_and_train_plus_val(
         model_profile_config_root=tmp_path / "configs/model_profiles",
         retrain_data_root=tmp_path / "data/retrained_selected",
         registry_root=tmp_path / "models/retrained_selected",
-        train_metrics_path=tmp_path / "metrics/retrained_selected/training_metrics.json",
+        train_metrics_path=tmp_path
+        / "metrics/retrained_selected/training_metrics.json",
         evaluation_metrics_path=tmp_path
         / "metrics/retrained_selected/evaluation_metrics.json",
         output_path=tmp_path / "metrics/retrained_selected/retrain_result.json",

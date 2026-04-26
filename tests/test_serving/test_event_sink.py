@@ -9,7 +9,6 @@ import pytest
 from recsys.serving.event_sink import EventSink
 from recsys.serving.schemas import ViewLog
 
-
 # ---------------------------------------------------------------------------
 # Stubs
 # ---------------------------------------------------------------------------
