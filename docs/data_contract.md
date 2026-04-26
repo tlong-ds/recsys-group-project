@@ -84,7 +84,6 @@ the processed stats artifact for the same data version, for example:
 
 - `data/versions/v1_strict_filter/processed/data_stats.json`
 - `data/versions/v2_sliding_window/processed/data_stats.json`
-- `data/versions/v3_train_plus_val/processed/data_stats.json`
 
 Those files summarize the post-filter train/validation/test splits that are
 consumed by the training pipeline.

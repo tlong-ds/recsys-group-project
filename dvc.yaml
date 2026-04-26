@@ -826,12 +826,71 @@ stages:
       - metrics/experiments/${item.data_version}/${item.model_profile}/evaluation_metrics.json:
           cache: false
 
-  select_and_promote_best_model:
+  select_best_model:
+    cmd: >
+      python -m recsys.training.select_model
+      --select-only
+      --best-model-path metrics/best_model.json
+      --experiments-root metrics/experiments
+    deps:
+      - src/recsys/training/select_model.py
+      - metrics/experiments
+    outs:
+      - metrics/best_model.json:
+          cache: false
+
+  retrain_selected_model:
+    cmd: >
+      python -m recsys.training.retrain_selected
+      --best-model-path metrics/best_model.json
+      --data-config configs/data_config.yaml
+      --training-config configs/training_config.yaml
+      --data-version-config-root configs/data_versions
+      --model-profile-config-root configs/model_profiles
+      --retrain-data-root data/retrained_selected
+      --registry-root models/retrained_selected
+      --train-metrics-path metrics/retrained_selected/training_metrics.json
+      --evaluation-metrics-path metrics/retrained_selected/evaluation_metrics.json
+      --output-path metrics/retrained_selected/retrain_result.json
+    deps:
+      - src/recsys/training/retrain_selected.py
+      - src/recsys/training/pipeline.py
+      - src/recsys/training/trainer.py
+      - src/recsys/training/registry.py
+      - src/recsys/training/tracking.py
+      - src/recsys/training/mlflow_registry.py
+      - src/recsys/models/graph_helpers.py
+      - src/recsys/models/srgnn.py
+      - src/recsys/models/tagnn.py
+      - src/recsys/models/ggnn.py
+      - src/recsys/evaluation/evaluator.py
+      - src/recsys/evaluation/metrics.py
+      - src/recsys/utils/config.py
+      - src/recsys/utils/logger.py
+      - configs/data_config.yaml
+      - configs/training_config.yaml
+      - configs/data_versions
+      - configs/model_profiles
+      - data/versions
+      - metrics/best_model.json
+    outs:
+      - models/retrained_selected/latest:
+          cache: true
+      - data/retrained_selected/trainval_examples.parquet
+      - data/retrained_selected/val_examples_empty.parquet
+    metrics:
+      - metrics/retrained_selected/training_metrics.json:
+          cache: false
+      - metrics/retrained_selected/evaluation_metrics.json:
+          cache: false
+      - metrics/retrained_selected/retrain_result.json:
+          cache: false
+
+  promote_retrained_model:
     cmd: >
       python -m recsys.training.select_model
       --training-config configs/training_config.yaml
-      --best-model-path metrics/best_model.json
-      --experiments-root metrics/experiments
+      --training-metrics-path metrics/retrained_selected/training_metrics.json
       --output-path metrics/promotion_result.json
       --canonical-model-name recsys-serving
       --target-alias Production
@@ -840,9 +899,7 @@ stages:
       - src/recsys/training/tracking.py
       - src/recsys/utils/config.py
       - configs/training_config.yaml
-      - metrics/experiments
+      - metrics/retrained_selected/training_metrics.json
     outs:
-      - metrics/best_model.json:
-          cache: false
       - metrics/promotion_result.json:
           cache: false

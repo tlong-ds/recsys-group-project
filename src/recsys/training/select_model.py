@@ -134,37 +134,13 @@ def _mlflow_client():
     return MlflowClient()
 
 
-def promote_best_model(
-    *,
-    training_config_path: str = "configs/training_config.yaml",
-    best_model_path: str = str(BEST_MODEL_METRICS_PATH),
-    experiments_root: str = str(EXPERIMENTS_METRICS_ROOT),
-    output_path: str = str(PROMOTION_RESULT_PATH),
-    canonical_model_name: str = CANONICAL_MODEL_NAME,
-    target_alias: str = CANONICAL_ALIAS,
+def _extract_registry_metadata(
+    training_payload: dict[str, Any], *, source_path: Path
 ) -> dict[str, str]:
-    """Promote selected winner metrics into canonical serving model + alias."""
-    training_cfg = load_config(training_config_path)
-    configure_tracking(training_cfg)
-
-    best_payload = _load_json(Path(best_model_path))
-    winner = best_payload.get("best_model")
-    if not isinstance(winner, dict):
-        raise ValueError("best_model.json must contain a 'best_model' object.")
-
-    data_version = str(winner.get("data_version", "")).strip()
-    model_profile = str(winner.get("model_profile", "")).strip()
-    if not data_version or not model_profile:
-        raise ValueError("best_model must include non-empty data_version/model_profile.")
-
-    training_metrics_path = (
-        Path(experiments_root) / data_version / model_profile / "training_metrics.json"
-    )
-    training_payload = _load_json(training_metrics_path)
     registry_info = training_payload.get("model_registry")
     if not isinstance(registry_info, dict):
         raise ValueError(
-            f"Missing model_registry metadata in {training_metrics_path}. "
+            f"Missing model_registry metadata in {source_path}. "
             "Ensure training registered model versions in MLflow."
         )
 
@@ -178,7 +154,22 @@ def promote_best_model(
         )
     if not source_uri:
         raise ValueError("model_registry metadata must include source artifact URI.")
+    return {
+        "model_name": source_model_name,
+        "model_version": source_model_version,
+        "run_id": source_run_id,
+        "source": source_uri,
+    }
 
+
+def _promote_registry_source(
+    *,
+    source_run_id: str,
+    source_uri: str,
+    output_path: str,
+    canonical_model_name: str,
+    target_alias: str,
+) -> dict[str, str]:
     client = _mlflow_client()
     try:
         client.create_registered_model(canonical_model_name)
@@ -208,6 +199,70 @@ def promote_best_model(
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, indent=2), encoding="utf-8")
     return result
+
+
+def promote_best_model(
+    *,
+    training_config_path: str = "configs/training_config.yaml",
+    best_model_path: str = str(BEST_MODEL_METRICS_PATH),
+    experiments_root: str = str(EXPERIMENTS_METRICS_ROOT),
+    output_path: str = str(PROMOTION_RESULT_PATH),
+    canonical_model_name: str = CANONICAL_MODEL_NAME,
+    target_alias: str = CANONICAL_ALIAS,
+) -> dict[str, str]:
+    """Promote selected winner metrics into canonical serving model + alias."""
+    training_cfg = load_config(training_config_path)
+    configure_tracking(training_cfg)
+
+    best_payload = _load_json(Path(best_model_path))
+    winner = best_payload.get("best_model")
+    if not isinstance(winner, dict):
+        raise ValueError("best_model.json must contain a 'best_model' object.")
+
+    data_version = str(winner.get("data_version", "")).strip()
+    model_profile = str(winner.get("model_profile", "")).strip()
+    if not data_version or not model_profile:
+        raise ValueError("best_model must include non-empty data_version/model_profile.")
+
+    training_metrics_path = (
+        Path(experiments_root) / data_version / model_profile / "training_metrics.json"
+    )
+    training_payload = _load_json(training_metrics_path)
+    metadata = _extract_registry_metadata(
+        training_payload,
+        source_path=training_metrics_path,
+    )
+    return _promote_registry_source(
+        source_run_id=metadata["run_id"],
+        source_uri=metadata["source"],
+        output_path=output_path,
+        canonical_model_name=canonical_model_name,
+        target_alias=target_alias,
+    )
+
+
+def promote_model_from_training_metrics(
+    *,
+    training_config_path: str = "configs/training_config.yaml",
+    training_metrics_path: str,
+    output_path: str = str(PROMOTION_RESULT_PATH),
+    canonical_model_name: str = CANONICAL_MODEL_NAME,
+    target_alias: str = CANONICAL_ALIAS,
+) -> dict[str, str]:
+    """Promote a model directly from one training_metrics.json payload."""
+    training_cfg = load_config(training_config_path)
+    configure_tracking(training_cfg)
+
+    metrics_path = Path(training_metrics_path)
+    training_payload = _load_json(metrics_path)
+    metadata = _extract_registry_metadata(training_payload, source_path=metrics_path)
+    return _promote_registry_source(
+        source_run_id=metadata["run_id"],
+        source_uri=metadata["source"],
+        output_path=output_path,
+        canonical_model_name=canonical_model_name,
+        target_alias=target_alias,
+    )
 
 
 def select_and_promote_best_model(
@@ -240,6 +295,14 @@ def main() -> None:
     parser.add_argument("--training-config", default="configs/training_config.yaml")
     parser.add_argument("--experiments-root", default=str(EXPERIMENTS_METRICS_ROOT))
     parser.add_argument("--best-model-path", default=str(BEST_MODEL_METRICS_PATH))
+    parser.add_argument(
+        "--training-metrics-path",
+        default=None,
+        help=(
+            "Promote directly from this training_metrics.json payload "
+            "(skips best-model selection)."
+        ),
+    )
     parser.add_argument("--output-path", default=str(PROMOTION_RESULT_PATH))
     parser.add_argument("--canonical-model-name", default=CANONICAL_MODEL_NAME)
     parser.add_argument("--target-alias", default=CANONICAL_ALIAS)
@@ -256,6 +319,17 @@ def main() -> None:
             output_path=args.best_model_path,
         )
         print(json.dumps({"best_model": result}, ensure_ascii=True))
+        return
+
+    if args.training_metrics_path:
+        result = promote_model_from_training_metrics(
+            training_config_path=args.training_config,
+            training_metrics_path=args.training_metrics_path,
+            output_path=args.output_path,
+            canonical_model_name=args.canonical_model_name,
+            target_alias=args.target_alias,
+        )
+        print(json.dumps(result, ensure_ascii=True))
         return
 
     result = select_and_promote_best_model(
