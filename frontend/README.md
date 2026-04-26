@@ -21,10 +21,7 @@ To deploy the frontend to Cloudflare Pages:
 2.  **Environment Variables**:
     - Add `VITE_RECSYS_API_KEY` in the Cloudflare Pages dashboard.
     - Add `API_ORIGIN` in Cloudflare Pages Functions settings (required, for example `http://your-alb-dns.ap-southeast-1.elb.amazonaws.com`).
-3.  **Redirects**: Keep `public/_redirects` as SPA fallback:
-    ```text
-    /* /index.html 200
-    ```
+3.  **SPA fallback**: Do not add `public/_redirects` with `/* /index.html 200`. Cloudflare Pages already provides SPA fallback by default when no top-level `404.html` exists.
 4.  **Build Settings**:
     - **Framework preset**: `Vite`
     - **Build command**: `npm run build`
