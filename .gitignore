@@ -211,9 +211,7 @@ __marimo__/
 
 __main__
 
-#png
-tagnn.png
-srgnn.png
+
 *.ingest
 mlflow_fresh.db
 
