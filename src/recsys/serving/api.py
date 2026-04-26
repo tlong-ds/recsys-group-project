@@ -130,8 +130,8 @@ def create_app(
     @app.on_event("startup")
     async def startup_event() -> None:
         # Initialize DB pool for async operations
-        app.state.pool = await asyncpg.create_pool(DB_URL)
-        app.state.view_queue = asyncio.Queue()
+        app.state.pool = await asyncpg.create_pool(DB_URL, min_size=2, max_size=10)
+        app.state.view_queue = asyncio.Queue(maxsize=10000)
         
         # Start background writer task for high-throughput views
         asyncio.create_task(batch_writer_task(app))
@@ -362,8 +362,11 @@ def create_app(
     @app.post("/views", status_code=202)
     async def log_view(view: ViewLog) -> dict[str, str]:
         """Asynchronously log a user item view to the batch queue."""
-        await app.state.view_queue.put(view)
-        return {"status": "accepted"}
+        try:
+            app.state.view_queue.put_nowait(view)
+            return {"status": "accepted"}
+        except asyncio.QueueFull:
+            raise HTTPException(status_code=503, detail="Server is too busy to process view logs.")
 
     @app.post("/recommend", response_model=RecommendResponse)
     async def recommend(
