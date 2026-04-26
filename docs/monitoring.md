@@ -15,6 +15,13 @@ The monitoring stack relies on **Prometheus** for metrics collection and **Grafa
 - **Authentication**: `/metrics` requires the same bearer API key as other protected API routes. Docker Compose mounts `deployment/secrets/recsys-api-key` into Prometheus as a bearer token file.
 - **Alerts**: Alerting rules are defined in `deployment/monitoring/alerts.yml` to trigger notifications when metrics cross specific thresholds.
 
+Configured alert scenarios:
+- API target is unreachable.
+- Model readiness gauge reports unavailable.
+- Online OOV item ratio is above threshold.
+- Recommendation error rate is above threshold.
+- Prediction p95 latency is above threshold.
+
 ### Online Serving Signals
 The online layer is intentionally lightweight and does not run Evidently,
 Pandas, or parquet-based drift reports in the API request path.
@@ -49,6 +56,13 @@ sum(rate(recsys_recommendation_requests_total{status!="success"}[5m]))
 Grafana is used to build dashboards visualizing the metrics collected by Prometheus.
 - **Datasource**: Prometheus is provisioned as a default datasource via `deployment/monitoring/grafana/provisioning/datasources/prometheus.yml`.
 - **Access**: The Grafana UI is bound to localhost in Docker Compose. Set `GRAFANA_ADMIN_PASSWORD` before starting the stack.
+
+Dashboard status:
+- The repo provisions the Prometheus datasource.
+- Dashboard panels are expected to be created from the PromQL queries above or
+  exported after a demo run.
+- No production traffic dashboard JSON is checked in because the project does
+  not include production traffic logs.
 
 ## Offline Drift Monitoring
 This repository does not have production traffic logs. Drift monitoring is
@@ -96,6 +110,12 @@ The JSON report is the primary artifact for DVC, tests, and report writing. It
 contains PSI checks for session-level features, Jensen-Shannon divergence for
 item popularity, top-N item overlap, OOV ratio, and an overall `ok`,
 `warning`, or `critical` status.
+
+Retraining trigger interpretation:
+- `ok`: no retraining action needed.
+- `warning`: inspect drift details and compare offline metrics before promotion.
+- `critical`: block automatic promotion and run a retraining/evaluation cycle
+  before serving a new alias.
 
 Evidently is optional and is used only for HTML visualization. Install it with:
 ```bash

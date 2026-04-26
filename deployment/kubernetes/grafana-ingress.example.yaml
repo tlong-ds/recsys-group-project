@@ -9,6 +9,7 @@ metadata:
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
     alb.ingress.kubernetes.io/ssl-redirect: "443"
     alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:ap-southeast-1:123456789012:certificate/replace-me"
+    alb.ingress.kubernetes.io/group.name: "recsys"
     external-dns.alpha.kubernetes.io/hostname: "grafana.example.com"
 spec:
   ingressClassName: alb

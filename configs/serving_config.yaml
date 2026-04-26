@@ -14,12 +14,12 @@ serving:
     max_body_bytes: 65536
     docs_enabled: false
   model_registry:
-    enabled: false
+    enabled: true
     model_name: recsys-srgnn
     model_alias: Production
     model_version: ""
     artifact_path: registered_model
-    local_cache_dir: .cache/recsys_registry
+    local_cache_dir: /app/models/cache
     fallback_to_filesystem: true
 
 mlflow:

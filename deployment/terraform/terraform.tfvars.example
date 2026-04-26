@@ -2,6 +2,11 @@ project_name = "recsys"
 environment  = "prod"
 aws_region   = "ap-southeast-1"
 
+# Cluster Configuration
+eks_cluster_name       = "unique-pop-otter"
+terraform_state_bucket = "recsys-data-storage-067518243363-ap-southeast-1-an"
+github_repo            = "repo:tlong-ds/recsys-group-project"
+
 availability_zones = [
   "ap-southeast-1a",
   "ap-southeast-1b",
@@ -33,4 +38,3 @@ domain_filters  = ["example.com"]
 tags = {
   Owner = "ml-platform"
 }
-

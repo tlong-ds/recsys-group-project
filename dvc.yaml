@@ -99,6 +99,135 @@ stages:
       - data/processed/data_stats.json:
           cache: false
 
+  train_baseline:
+    cmd: python -m recsys.training.pipeline --stage train --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params params.yaml --registry-root models/trained/baseline --train-metrics-path metrics/baseline/training_metrics.json
+    params:
+      - params.yaml:
+          - model.type
+          - model.variant
+          - model.name
+          - model.version
+          - model.embedding_dim
+          - model.hidden_size
+          - model.step
+          - model.max_session_length
+          - model.fallback_weight
+          - model.score_chunk_size
+          - training.top_k
+      - configs/training_config.yaml:
+          - training.seed
+          - training.batch_size
+          - training.device
+          - training.num_epochs
+          - training.lr
+          - training.weight_decay
+          - training.early_stopping_patience
+          - training.early_stopping_min_delta
+          - training.num_workers
+          - training.pin_memory
+          - training.persistent_workers
+          - training.prefetch_factor
+    deps:
+      - src/recsys/training/pipeline.py
+      - src/recsys/training/mlflow_registry.py
+      - src/recsys/training/trainer.py
+      - src/recsys/training/registry.py
+      - src/recsys/training/tracking.py
+      - src/recsys/models/graph_helpers.py
+      - src/recsys/models/srgnn.py
+      # - src/recsys/models/tagnn.py
+      - src/recsys/models/ggnn.py
+      - src/recsys/evaluation/evaluator.py
+      - src/recsys/evaluation/metrics.py
+      - src/recsys/utils/config.py
+      - src/recsys/utils/logger.py
+      - configs/data_config.yaml
+      - configs/model_config.yaml
+      - configs/training_config.yaml
+      - params.yaml
+      - data/processed/train_examples.parquet
+      - data/processed/val_examples.parquet
+      - data/processed/item_vocab.json
+      - data/processed/data_stats.json
+    outs:
+      - models/trained/baseline/latest:
+          cache: true
+    metrics:
+      - metrics/baseline/training_metrics.json:
+          cache: false
+
+  eval_baseline:
+    cmd: python -m recsys.training.pipeline --stage evaluate --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params params.yaml --registry-root models/trained/baseline --evaluation-metrics-path metrics/baseline/evaluation_metrics.json
+    params:
+      - params.yaml:
+          - model.type
+          - model.variant
+          - model.name
+          - model.version
+          - model.embedding_dim
+          - model.hidden_size
+          - model.step
+          - model.max_session_length
+          - model.fallback_weight
+          - model.score_chunk_size
+          - training.top_k
+      - configs/training_config.yaml:
+          - training.device
+          - training.top_k
+    deps:
+      - src/recsys/training/pipeline.py
+      - src/recsys/training/mlflow_registry.py
+      - src/recsys/training/tracking.py
+      - src/recsys/training/registry.py
+      - src/recsys/models/graph_helpers.py
+      - src/recsys/models/srgnn.py
+      # - src/recsys/models/tagnn.py
+      - src/recsys/models/ggnn.py
+      - src/recsys/evaluation/evaluator.py
+      - src/recsys/evaluation/metrics.py
+      - src/recsys/utils/config.py
+      - src/recsys/utils/logger.py
+      - configs/data_config.yaml
+      - configs/model_config.yaml
+      - configs/training_config.yaml
+      - params.yaml
+      - models/trained/baseline/latest
+      - data/processed/test_examples.parquet
+      - data/processed/data_stats.json
+    metrics:
+      - metrics/baseline/evaluation_metrics.json:
+          cache: false
+
+  data_version_baseline:
+    cmd: python -m recsys.data.pipeline --stage all --config configs/data_config.yaml --params configs/data_versions/baseline.yaml
+    deps:
+      - src/recsys/data/pipeline.py
+      - src/recsys/data/ingest.py
+      - src/recsys/data/validator.py
+      - src/recsys/data/preprocessor.py
+      - src/recsys/data/splitter.py
+      - src/recsys/data/training_examples.py
+      - src/recsys/data/stages.py
+      - src/recsys/utils/config.py
+      - configs/data_config.yaml
+      - configs/data_versions/baseline.yaml
+      - data/raw/train-item-views.csv
+    outs:
+      - data/versions/baseline/interim/interactions.parquet
+      - data/versions/baseline/interim/clean_interactions.parquet
+      - data/versions/baseline/interim/train_interactions.parquet
+      - data/versions/baseline/interim/val_interactions.parquet
+      - data/versions/baseline/interim/test_interactions.parquet
+      - data/versions/baseline/processed/train_examples.parquet
+      - data/versions/baseline/processed/val_examples.parquet
+      - data/versions/baseline/processed/test_examples.parquet
+      - data/versions/baseline/processed/item_vocab.json
+    metrics:
+      - data/versions/baseline/processed/data_stats.json:
+          cache: false
+      - data/versions/baseline/validation_report.json:
+          cache: false
+
   data_version_v1:
     cmd: python -m recsys.data.pipeline --stage all --config configs/data_config.yaml --params configs/data_versions/v1_strict_filter.yaml
     deps:
@@ -157,36 +286,6 @@ stages:
       - data/versions/v2_sliding_window/processed/data_stats.json:
           cache: false
       - data/versions/v2_sliding_window/validation_report.json:
-          cache: false
-
-  data_version_v3:
-    cmd: python -m recsys.data.pipeline --stage all --config configs/data_config.yaml --params configs/data_versions/v3_train_plus_val.yaml
-    deps:
-      - src/recsys/data/pipeline.py
-      - src/recsys/data/ingest.py
-      - src/recsys/data/validator.py
-      - src/recsys/data/preprocessor.py
-      - src/recsys/data/splitter.py
-      - src/recsys/data/training_examples.py
-      - src/recsys/data/stages.py
-      - src/recsys/utils/config.py
-      - configs/data_config.yaml
-      - configs/data_versions/v3_train_plus_val.yaml
-      - data/raw/train-item-views.csv
-    outs:
-      - data/versions/v3_train_plus_val/interim/interactions.parquet
-      - data/versions/v3_train_plus_val/interim/clean_interactions.parquet
-      - data/versions/v3_train_plus_val/interim/train_interactions.parquet
-      - data/versions/v3_train_plus_val/interim/val_interactions.parquet
-      - data/versions/v3_train_plus_val/interim/test_interactions.parquet
-      - data/versions/v3_train_plus_val/processed/train_examples.parquet
-      - data/versions/v3_train_plus_val/processed/val_examples.parquet
-      - data/versions/v3_train_plus_val/processed/test_examples.parquet
-      - data/versions/v3_train_plus_val/processed/item_vocab.json
-    metrics:
-      - data/versions/v3_train_plus_val/processed/data_stats.json:
-          cache: false
-      - data/versions/v3_train_plus_val/validation_report.json:
           cache: false
 
   train_v1:
@@ -363,103 +462,16 @@ stages:
       - metrics/v2_sliding_window/evaluation_metrics.json:
           cache: false
 
-  train_v3:
-    cmd: python -m recsys.training.pipeline --stage train --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_profiles/srgnn.yaml --training-config configs/training_config.yaml --params configs/data_versions/v3_train_plus_val.yaml --registry-root models/trained/v3_train_plus_val --train-metrics-path metrics/v3_train_plus_val/training_metrics.json
-    params:
-      - configs/model_profiles/srgnn.yaml:
-          - model.type
-          - model.variant
-          - model.device
-          - model.name
-          - model.version
-          - model.embedding_dim
-          - model.hidden_size
-          - model.step
-          - model.max_session_length
-          - model.fallback_weight
-          - model.score_chunk_size
-      - configs/training_config.yaml:
-          - training.top_k
-    deps:
-      - src/recsys/training/pipeline.py
-      - src/recsys/training/mlflow_registry.py
-      - src/recsys/training/trainer.py
-      - src/recsys/training/registry.py
-      - src/recsys/training/tracking.py
-      - src/recsys/models/graph_helpers.py
-      - src/recsys/models/srgnn.py
-      # - src/recsys/models/tagnn.py
-      - src/recsys/models/ggnn.py
-      - src/recsys/evaluation/evaluator.py
-      - src/recsys/evaluation/metrics.py
-      - src/recsys/utils/config.py
-      - src/recsys/utils/logger.py
-      - configs/data_config.yaml
-      - configs/model_profiles/srgnn.yaml
-      - configs/training_config.yaml
-      - configs/data_versions/v3_train_plus_val.yaml
-      - data/versions/v3_train_plus_val/processed/train_examples.parquet
-      - data/versions/v3_train_plus_val/processed/val_examples.parquet
-      - data/versions/v3_train_plus_val/processed/item_vocab.json
-      - data/versions/v3_train_plus_val/processed/data_stats.json
-    outs:
-      - models/trained/v3_train_plus_val/latest:
-          cache: true
-    metrics:
-      - metrics/v3_train_plus_val/training_metrics.json:
-          cache: false
-
-  eval_v3:
-    cmd: python -m recsys.training.pipeline --stage evaluate --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_profiles/srgnn.yaml --training-config configs/training_config.yaml --params configs/data_versions/v3_train_plus_val.yaml --registry-root models/trained/v3_train_plus_val --evaluation-metrics-path metrics/v3_train_plus_val/evaluation_metrics.json
-    params:
-      - configs/model_profiles/srgnn.yaml:
-          - model.type
-          - model.variant
-          - model.device
-          - model.name
-          - model.version
-          - model.embedding_dim
-          - model.hidden_size
-          - model.step
-          - model.max_session_length
-          - model.fallback_weight
-          - model.score_chunk_size
-      - configs/training_config.yaml:
-          - training.top_k
-    deps:
-      - src/recsys/training/pipeline.py
-      - src/recsys/training/mlflow_registry.py
-      - src/recsys/training/tracking.py
-      - src/recsys/training/registry.py
-      - src/recsys/models/graph_helpers.py
-      - src/recsys/models/srgnn.py
-      # - src/recsys/models/tagnn.py
-      - src/recsys/models/ggnn.py
-      - src/recsys/evaluation/evaluator.py
-      - src/recsys/evaluation/metrics.py
-      - src/recsys/utils/config.py
-      - src/recsys/utils/logger.py
-      - configs/data_config.yaml
-      - configs/model_profiles/srgnn.yaml
-      - configs/training_config.yaml
-      - configs/data_versions/v3_train_plus_val.yaml
-      - models/trained/v3_train_plus_val/latest
-      - data/versions/v3_train_plus_val/processed/test_examples.parquet
-      - data/versions/v3_train_plus_val/processed/data_stats.json
-    metrics:
-      - metrics/v3_train_plus_val/evaluation_metrics.json:
-          cache: false
-
   compare_data_versions:
-    cmd: python -m recsys.training.compare_versions --spec v1_strict_filter,metrics/v1_strict_filter/training_metrics.json,metrics/v1_strict_filter/evaluation_metrics.json --spec v2_sliding_window,metrics/v2_sliding_window/training_metrics.json,metrics/v2_sliding_window/evaluation_metrics.json --spec v3_train_plus_val,metrics/v3_train_plus_val/training_metrics.json,metrics/v3_train_plus_val/evaluation_metrics.json --drift-spec baseline,metrics/monitoring/drift_baseline.json --drift-spec v1_vs_v2,metrics/monitoring/drift_v1_vs_v2.json --drift-spec synthetic_oov,metrics/monitoring/drift_synthetic_oov.json --output metrics/data_version_comparison.json
+    cmd: python -m recsys.training.compare_versions --spec baseline,metrics/baseline/training_metrics.json,metrics/baseline/evaluation_metrics.json --spec v1_strict_filter,metrics/v1_strict_filter/training_metrics.json,metrics/v1_strict_filter/evaluation_metrics.json --spec v2_sliding_window,metrics/v2_sliding_window/training_metrics.json,metrics/v2_sliding_window/evaluation_metrics.json --drift-spec baseline,metrics/monitoring/drift_baseline.json --drift-spec v1_vs_v2,metrics/monitoring/drift_v1_vs_v2.json --drift-spec synthetic_oov,metrics/monitoring/drift_synthetic_oov.json --output metrics/data_version_comparison.json
     deps:
       - src/recsys/training/compare_versions.py
+      - metrics/baseline/training_metrics.json
+      - metrics/baseline/evaluation_metrics.json
       - metrics/v1_strict_filter/training_metrics.json
       - metrics/v1_strict_filter/evaluation_metrics.json
       - metrics/v2_sliding_window/training_metrics.json
       - metrics/v2_sliding_window/evaluation_metrics.json
-      - metrics/v3_train_plus_val/training_metrics.json
-      - metrics/v3_train_plus_val/evaluation_metrics.json
       - metrics/monitoring/drift_baseline.json
       - metrics/monitoring/drift_v1_vs_v2.json
       - metrics/monitoring/drift_synthetic_oov.json
@@ -535,9 +547,9 @@ stages:
   train_matrix:
     matrix:
       data_version:
+        - baseline
         - v1_strict_filter
         - v2_sliding_window
-        # - v3_train_plus_val
       model_profile:
         - srgnn
         - srgnn_fc
@@ -607,6 +619,7 @@ stages:
       - data/versions/${item.data_version}/processed/train_examples.parquet
       - data/versions/${item.data_version}/processed/val_examples.parquet
       - data/versions/${item.data_version}/processed/item_vocab.json
+      - data/versions/${item.data_version}/processed/data_stats.json
     outs:
       - models/experiments/${item.data_version}/${item.model_profile}/latest:
           cache: true
@@ -617,9 +630,9 @@ stages:
   train_matrix_slow:
     matrix:
       data_version:
+        - baseline
         - v1_strict_filter
         - v2_sliding_window
-        - v3_train_plus_val
       model_profile:
         #- srgnn_ngc
         - tagnn
@@ -685,6 +698,7 @@ stages:
       - data/versions/${item.data_version}/processed/train_examples.parquet
       - data/versions/${item.data_version}/processed/val_examples.parquet
       - data/versions/${item.data_version}/processed/item_vocab.json
+      - data/versions/${item.data_version}/processed/data_stats.json
     outs:
       - models/experiments/${item.data_version}/${item.model_profile}/latest:
           cache: true
@@ -695,9 +709,9 @@ stages:
   evaluate_matrix:
     matrix:
       data_version:
+        - baseline
         - v1_strict_filter
         - v2_sliding_window
-        # - v3_train_plus_val
       model_profile:
         - srgnn
         - srgnn_fc
@@ -749,6 +763,7 @@ stages:
       - configs/data_versions/${item.data_version}.yaml
       - models/experiments/${item.data_version}/${item.model_profile}/latest/model.json
       - data/versions/${item.data_version}/processed/test_examples.parquet
+      - data/versions/${item.data_version}/processed/data_stats.json
     metrics:
       - metrics/experiments/${item.data_version}/${item.model_profile}/evaluation_metrics.json:
           cache: false
@@ -756,9 +771,9 @@ stages:
   evaluate_matrix_slow:
     matrix:
       data_version:
+        - baseline
         - v1_strict_filter
         - v2_sliding_window
-        - v3_train_plus_val
       model_profile:
         #- srgnn_ngc
         - tagnn
@@ -806,6 +821,19 @@ stages:
       - configs/data_versions/${item.data_version}.yaml
       - models/experiments/${item.data_version}/${item.model_profile}/latest/model.json
       - data/versions/${item.data_version}/processed/test_examples.parquet
+      - data/versions/${item.data_version}/processed/data_stats.json
     metrics:
       - metrics/experiments/${item.data_version}/${item.model_profile}/evaluation_metrics.json:
           cache: false
+
+  select_best_model:
+    cmd: python -m recsys.training.select_model
+    deps:
+      - src/recsys/training/select_model.py
+      - metrics/experiments
+      - metrics/baseline/evaluation_metrics.json
+    outs:
+      - metrics/best_model.json:
+          cache: false
+      - models/trained/latest:
+          cache: true

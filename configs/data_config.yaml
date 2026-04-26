@@ -1,11 +1,5 @@
 # Data Processing Configuration
 data:
-  # Direct inputs for training from preprocessed feature-level artifacts
-  train_examples_path: data/processed/train_examples.parquet
-  val_examples_path: data/processed/val_examples.parquet
-  test_examples_path: data/processed/test_examples.parquet
-  item_vocab_path: data/processed/item_vocab.json
-
   # Paths
   raw_path: data/raw
   interim_path: data/interim

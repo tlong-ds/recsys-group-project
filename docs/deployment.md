@@ -7,7 +7,7 @@ The project includes a `Dockerfile` and a `docker-compose.yaml` file to containe
 
 ### Services in Docker Compose
 - **api**: The FastAPI application serving recommendations (Port `8000`) with health checks.
-- **frontend**: Vite UI (Port `5173`) proxied to the API via `/api`.
+- **frontend**: Optional Vite UI placeholder. The service is currently commented out in `docker-compose.yaml`, so the active local stack is API-first.
 - **mlflow** *(profile: `tracking`)*: Local MLflow tracking server (Port `5000`).
 - **prometheus** *(profile: `observability`)*: Metrics collection (Port `9090`).
 - **grafana** *(profile: `observability`)*: Metrics visualization (Port `3000`).
@@ -16,8 +16,14 @@ To start local-first core services:
 ```bash
 cp .env.example .env
 # set at minimum: RECSYS_API_KEYS
-docker compose up -d --build api frontend
+docker compose up -d --build api
 ```
+
+The default serving config points at `models/trained/latest/`. If you want to
+serve one of the checked-in versioned artifacts, set `serving.model_path` in
+`configs/serving_config.yaml` to an existing directory such as
+`models/trained/v1_strict_filter/latest/` before starting the API, or enable
+MLflow registry loading and configure the target model alias/version.
 
 To enable local observability:
 ```bash
@@ -41,7 +47,7 @@ Kubernetes manifests are located in the `deployment/kubernetes/` directory.
 ### Components
 - **Deployment**: `api-deployment.yaml` defines the deployment for the `recsys-api`, ensuring a replica is running and configured with the correct environment variables (e.g., `RECSYS_MODEL_PATH`).
 - **Service**: `api-service.yaml` exposes the FastAPI deployment to be accessible within or outside the cluster.
-- **Ingress**: `api-ingress.yaml` exposes the API through AWS ALB with HTTPS and ExternalDNS annotations.
+- **Ingress**: `api-ingress.yaml` is an AWS ALB ingress example. The checked-in API ingress is HTTP-only; add host, certificate ARN, HTTPS listener, and ExternalDNS annotations before using it as a public production endpoint.
 - **Namespace/Account/Config**: `namespace.yaml`, `api-service-account.yaml`, and `recsys-serving-configmap.yaml` provide EKS-ready runtime defaults.
 
 ## CI/CD container publishing (GHCR)
@@ -181,18 +187,33 @@ Required GitHub repository secrets:
 
 ## Continuous Training (CT) with model promotion gates
 
-Workflow `.github/workflows/ct-train.yml` handles CT:
+The repository includes the CT promotion helper `recsys-ct-promote`
+(`src/recsys/training/ct_promote.py`). It is designed to be called after a
+training/evaluation run has produced metrics JSON files.
 
-1. Trains + evaluates a selected data version/model profile.
-2. Reads generated metrics JSON outputs.
-3. Applies quality gates (minimum `hr@k`, optional improvement over baseline).
-4. Promotes MLflow registry alias (default `Production`) when gates pass.
+The helper:
+
+1. Reads the candidate training and evaluation metrics JSON outputs.
+2. Applies quality gates (minimum `hr@k`, optional improvement over a baseline).
+3. Promotes an MLflow registry alias (default `Production`) when gates pass.
 
 Default baseline for the improvement gate is `metrics/evaluation_metrics.json`.
-You can run CT manually with custom inputs (`data_version`, `model_profile`,
-`min_hr_at_k`, `require_improvement`, `target_alias`) or let the weekly schedule run.
+For a production schedule, wire this helper into a GitHub Actions workflow or an
+external scheduler after the train/evaluate command finishes.
 
-Additional GitHub repository secrets needed for CT:
+Example manual promotion command:
+
+```bash
+recsys-ct-promote \
+  --training-config configs/training_config.yaml \
+  --train-metrics-path metrics/v1_strict_filter/training_metrics.json \
+  --evaluation-metrics-path metrics/v1_strict_filter/evaluation_metrics.json \
+  --metric-key 'hr@k' \
+  --min-threshold 0.45 \
+  --target-alias Production
+```
+
+If CT is wired into GitHub Actions, the scheduler needs these repository secrets:
 
 - `DAGSHUB_USER_TOKEN`
 - `DAGSHUB_USERNAME`
@@ -218,9 +239,9 @@ If you want serving to load promoted registry models directly, enable
    - If infra changes caused issues, revert Terraform module inputs and re-apply.
 
 3. **CT promotion controls**
-   - Run `ct-train` manually for ad-hoc retraining or rely on schedule.
+   - Run `recsys-ct-promote` after ad-hoc retraining, or call it from an external schedule.
    - Promotion is blocked when quality gates fail (`min_hr_at_k`, optional baseline improvement).
-   - To stop auto-promotion, disable workflow schedule or set a stricter threshold.
+   - To stop auto-promotion, disable the scheduler that calls the helper or set a stricter threshold.
 
 4. **Secret rotation**
    - Rotate GitHub secrets first (`DAGSHUB_USER_TOKEN`, API keys, Grafana password).

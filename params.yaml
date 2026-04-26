@@ -35,9 +35,9 @@ training:
 
 experiments:
   data_versions:
+    - baseline
     - v1_strict_filter
     - v2_sliding_window
-    - v3_train_plus_val
   model_profiles:
     - srgnn
     - srgnn_ngc
