@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -64,6 +65,28 @@ def test_recommend_requires_api_key(monkeypatch) -> None:
     assert response.json()["recommendations"] == [100, 101, 102]
 
 
+@pytest.mark.parametrize(
+    ("method", "path", "kwargs"),
+    [
+        ("get", "/metrics", {}),
+        ("get", "/products", {}),
+        ("post", "/views", {"json": {"sessionId": "s1", "itemId": 100}}),
+        ("get", "/evaluations", {}),
+    ],
+)
+def test_protected_endpoints_require_api_key(
+    monkeypatch,
+    method: str,
+    path: str,
+    kwargs: dict[str, object],
+) -> None:
+    client = TestClient(_app(monkeypatch))
+
+    response = getattr(client, method)(path, **kwargs)
+
+    assert response.status_code == 401
+
+
 def test_metrics_requires_api_key_and_docs_are_disabled(monkeypatch) -> None:
     client = TestClient(_app(monkeypatch))
 
@@ -84,6 +107,42 @@ def test_health_is_public_and_sanitized(monkeypatch) -> None:
     assert "model_path" not in body
     assert "run_id" in body
     assert "error" not in body
+
+
+def test_ready_is_public(monkeypatch) -> None:
+    client = TestClient(_app(monkeypatch))
+
+    response = client.get("/ready")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ready"
+
+
+def test_cors_uses_configured_allowed_origins(monkeypatch) -> None:
+    app = _app(monkeypatch)
+    client = TestClient(app)
+    allowed_origin = "http://0.0.0.0:5173"
+    blocked_origin = "https://example.invalid"
+
+    allowed_response = client.options(
+        "/recommend",
+        headers={
+            "Origin": allowed_origin,
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+    blocked_response = client.options(
+        "/recommend",
+        headers={
+            "Origin": blocked_origin,
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+
+    assert allowed_response.status_code == 200
+    assert allowed_response.headers["access-control-allow-origin"] == allowed_origin
+    assert blocked_response.status_code == 400
+    assert "access-control-allow-origin" not in blocked_response.headers
 
 
 def test_validation_rejects_unsafe_payloads(monkeypatch) -> None:

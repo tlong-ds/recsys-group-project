@@ -15,6 +15,7 @@ import uvicorn
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from loguru import logger
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     Counter,
@@ -45,6 +46,9 @@ load_dotenv()
 
 DEFAULT_CONFIG_PATH = Path("configs/serving_config.yaml")
 CONFIG_ENV_VAR = "RECSYS_SERVING_CONFIG"
+DEFAULT_CORS_ALLOWED_ORIGINS = (
+    "http://0.0.0.0:5173",
+)
 
 
 # Custom metrics
@@ -88,6 +92,14 @@ RECSYS_MODEL_READY = Gauge(
     "Whether the serving process can load the configured model",
 )
 RECSYS_MODEL_READY.set(0)
+RECSYS_CATALOG_LOOKUP_FAILURES_TOTAL = Counter(
+    "recsys_catalog_lookup_failures_total",
+    "Total number of failed catalog metadata lookups",
+)
+RECSYS_VIEW_LOG_FAILURES_TOTAL = Counter(
+    "recsys_view_log_failures_total",
+    "Total number of failed user view log attempts",
+)
 
 
 def create_app(
@@ -115,7 +127,7 @@ def create_app(
     )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=_cors_allowed_origins(config_serving),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -126,21 +138,29 @@ def create_app(
 
     @app.on_event("startup")
     async def startup_event() -> None:
-        # Initialize DB pool for async operations
-        db_url = os.getenv("NEON_DB_URL")
-        app.state.pool = await asyncpg.create_pool(db_url, min_size=2, max_size=10)
+        app.state.pool = None
         app.state.view_queue = asyncio.Queue(maxsize=10000)
-        
-        # Start background writer task for high-throughput views
-        asyncio.create_task(batch_writer_task(app))
-        
+
+        db_url = os.getenv("NEON_DB_URL", "").strip()
+        if db_url:
+            try:
+                app.state.pool = await asyncpg.create_pool(
+                    db_url, min_size=2, max_size=10
+                )
+                asyncio.create_task(batch_writer_task(app))
+            except Exception as exc:
+                logger.warning("Catalog database pool initialization failed: {}", exc)
+        else:
+            logger.warning("NEON_DB_URL is not configured; catalog DB access disabled")
+
         if preload_on_startup:
             preload_model()
 
     @app.on_event("shutdown")
     async def shutdown_event() -> None:
-        if hasattr(app.state, "pool"):
-            await app.state.pool.close()
+        pool = getattr(app.state, "pool", None)
+        if pool is not None:
+            await pool.close()
 
     async def batch_writer_task(app: FastAPI) -> None:
         """Background task to batch write user views to DB without blocking the API."""
@@ -150,7 +170,7 @@ def create_app(
                 # Wait for first item to arrive
                 view = await app.state.view_queue.get()
                 batch.append(view)
-                
+
                 # Collect more items for up to 1 second or until batch size 1000
                 start_collect = time.time()
                 while len(batch) < 1000 and (time.time() - start_collect) < 1.0:
@@ -159,7 +179,7 @@ def create_app(
                         batch.append(view)
                     except asyncio.QueueEmpty:
                         await asyncio.sleep(0.1)
-                
+
                 if batch:
                     async with app.state.pool.acquire() as conn:
                         query = (
@@ -169,19 +189,19 @@ def create_app(
                         )
                         values = [
                             (
-                                v.sessionId, 
-                                v.userId, 
-                                v.itemId, 
+                                v.sessionId,
+                                v.userId,
+                                v.itemId,
                                 v.timeframe or int(time.time() * 1000),
-                                v.eventdate or time.strftime("%Y-%m-%d")
+                                v.eventdate or time.strftime("%Y-%m-%d"),
                             )
                             for v in batch
                         ]
                         await conn.executemany(query, values)
-            except Exception as e:
-                # In production, use structured logging here
-                print(f"Error in batch_writer_task: {e}")
-            
+            except Exception as exc:
+                RECSYS_VIEW_LOG_FAILURES_TOTAL.inc(len(batch) or 1)
+                logger.exception("Failed to batch write user views: {}", exc)
+
             # Yield control to prevent CPU spinning if queue was empty
             await asyncio.sleep(0.5)
 
@@ -203,9 +223,8 @@ def create_app(
                 if not deploy_overrides.get("model_version")
                 else None
             )
-            model_version = (
-                deploy_overrides.get("model_version")
-                or registry_cfg.get("model_version")
+            model_version = deploy_overrides.get("model_version") or registry_cfg.get(
+                "model_version"
             )
             run_id = deploy_overrides.get("run_id")
             artifact_path = str(registry_cfg.get("artifact_path", "registered_model"))
@@ -283,14 +302,16 @@ def create_app(
             ) from exc
 
     @app.get("/evaluations", response_model=EvaluationsResponse)
-    def get_evaluations() -> EvaluationsResponse:
+    def get_evaluations(
+        _: str | None = Depends(verify_api_key),
+    ) -> EvaluationsResponse:
         import json
-        
+
         experiments_dir = Path("models/experiments")
         results: list[ModelMetrics] = []
         if not experiments_dir.exists():
             return EvaluationsResponse(metrics=results)
-        
+
         for data_version_dir in experiments_dir.iterdir():
             if not data_version_dir.is_dir():
                 continue
@@ -302,7 +323,7 @@ def create_app(
                     try:
                         with open(metrics_file) as f:
                             metrics = json.load(f)
-                        
+
                         profile = model_dir.name.upper()
                         if profile.startswith("SRGNN_"):
                             profile = f"SR-GNN ({profile.split('_')[1].upper()})"
@@ -312,49 +333,57 @@ def create_app(
                             profile = "TAGNN"
                         elif profile == "GGNN":
                             profile = "GGNN"
-                        
-                        results.append(ModelMetrics(
-                            profile=profile,
-                            dataVersion=data_version_dir.name,
-                            hrAtK=metrics.get("hr@k", 0.0),
-                            mrrAtK=metrics.get("mrr@k", 0.0)
-                        ))
-                    except Exception as e:
-                        print(f"Failed to load metrics for {model_dir.name}: {e}")
-        
+
+                        results.append(
+                            ModelMetrics(
+                                profile=profile,
+                                dataVersion=data_version_dir.name,
+                                hrAtK=metrics.get("hr@k", 0.0),
+                                mrrAtK=metrics.get("mrr@k", 0.0),
+                            )
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "Failed to load metrics for {}: {}",
+                            model_dir.name,
+                            exc,
+                        )
+
         return EvaluationsResponse(metrics=results)
 
     @app.get("/products", response_model=PaginatedProductsResponse)
     async def get_products(
         page: int = 1,
         page_size: int = 20,
-        category_id: int | None = None
+        category_id: int | None = None,
+        _: str | None = Depends(verify_api_key),
     ) -> PaginatedProductsResponse:
         """Fetch the product catalog from the database with offset-based pagination."""
-        async with app.state.pool.acquire() as conn:
+        pool = _catalog_pool(app)
+        async with pool.acquire() as conn:
             where_clauses = []
             params = []
-            
+
             if category_id is not None:
                 where_clauses.append(f'pc."categoryId" = ${len(params) + 1}')
                 params.append(category_id)
-                
+
             where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
-            
+
             # Get total count for pagination metadata
             count_query = (
-                f'SELECT COUNT(*) FROM products p '
+                f"SELECT COUNT(*) FROM products p "
                 f'JOIN product_categories pc ON p."itemId" = pc."itemId" '
-                f'{where_sql}'  # nosec B608
+                f"{where_sql}"  # nosec B608
             )
             total_count = await conn.fetchval(count_query, *params)
-            
+
             offset = (page - 1) * page_size
             limit_param = f"${len(params) + 1}"
             params.append(page_size)
             offset_param = f"${len(params) + 1}"
             params.append(offset)
-            
+
             query = (
                 'SELECT p."itemId" as "id", pc."categoryId" as "categoryId", '
                 'p.product_name_tokens as "name", '
@@ -365,28 +394,35 @@ def create_app(
                 'ORDER BY p."itemId" ASC '
                 f"LIMIT {limit_param} OFFSET {offset_param}"  # nosec B608
             )
-            
+
             rows = await conn.fetch(query, *params)
             items = [ProductInfo(**dict(row)) for row in rows]
-            
+
             # In offset-based, we return next_page instead of cursor
             next_page = page + 1 if offset + len(items) < total_count else None
             total_pages = (total_count + page_size - 1) // page_size
-            
+
             return PaginatedProductsResponse(
-                items=items, 
+                items=items,
                 total_pages=total_pages,
                 current_page=page,
-                next_cursor=next_page
+                next_cursor=next_page,
             )
 
     @app.post("/views", status_code=202)
-    async def log_view(view: ViewLog) -> dict[str, str]:
+    async def log_view(
+        view: ViewLog,
+        _: str | None = Depends(verify_api_key),
+    ) -> dict[str, str]:
         """Asynchronously log a user item view to the batch queue."""
+        if getattr(app.state, "pool", None) is None:
+            RECSYS_VIEW_LOG_FAILURES_TOTAL.inc()
+            raise HTTPException(status_code=503, detail="Catalog database unavailable.")
         try:
             app.state.view_queue.put_nowait(view)
             return {"status": "accepted"}
         except asyncio.QueueFull:
+            RECSYS_VIEW_LOG_FAILURES_TOTAL.inc()
             raise HTTPException(
                 status_code=503, detail="Server is too busy to process view logs."
             )
@@ -414,12 +450,13 @@ def create_app(
                 request.item_sequence,
                 top_k=request.top_k,
             )
-            
+
             # Fetch metadata for recommendations
             recommended_products = []
             if recommendations:
                 try:
-                    async with api_request.app.state.pool.acquire() as conn:
+                    pool = _catalog_pool(api_request.app)
+                    async with pool.acquire() as conn:
                         rows = await conn.fetch(
                             'SELECT p."itemId" as "id", pc."categoryId" '
                             'as "categoryId", '
@@ -430,36 +467,36 @@ def create_app(
                             'WHERE p."itemId" = ANY($1)',
                             recommendations,
                         )
-                        # Debug logging to investigate missing metadata
-                        print(
-                            f"DEBUG: Found {len(rows)} metadata rows for "
-                            f"{len(recommendations)} recommendations"
-                        )
-                        if rows:
-                            print(f"DEBUG: First row keys: {list(rows[0].keys())}")
-                        
                         # Maintain order of recommendations
-                        metadata_map = {row['id']: row for row in rows}
+                        metadata_map = {row["id"]: row for row in rows}
                         for r_id in recommendations:
                             if r_id in metadata_map:
                                 row = metadata_map[r_id]
-                                recommended_products.append(ProductInfo(
-                                    id=row['id'],
-                                    categoryId=row['categoryId'],
-                                    name=row['name'],
-                                    price=row['price']
-                                ))
+                                recommended_products.append(
+                                    ProductInfo(
+                                        id=row["id"],
+                                        categoryId=row["categoryId"],
+                                        name=row["name"],
+                                        price=row["price"],
+                                    )
+                                )
                             else:
                                 # Fallback if metadata missing
-                                recommended_products.append(ProductInfo(
-                                    id=r_id,
-                                    categoryId=0,
-                                    name=f"Product {r_id}",
-                                    price=0.0
-                                ))
+                                recommended_products.append(
+                                    ProductInfo(
+                                        id=r_id,
+                                        categoryId=0,
+                                        name=f"Product {r_id}",
+                                        price=0.0,
+                                    )
+                                )
                 except Exception as db_err:
-                    print(f"Error fetching metadata for recommendations: {db_err}")
-                    # Fallback to simple list if DB fails
+                    RECSYS_CATALOG_LOOKUP_FAILURES_TOTAL.inc()
+                    logger.warning(
+                        "Falling back to recommendation IDs after catalog lookup "
+                        "failure: {}",
+                        db_err,
+                    )
                     recommended_products = [
                         ProductInfo(
                             id=r_id, categoryId=0, name=f"Product {r_id}", price=0.0
@@ -492,10 +529,32 @@ def create_app(
             session_id=request.session_id,
             item_sequence=request.item_sequence,
             recommendations=recommendations,
-            recommended_products=recommended_products
+            recommended_products=recommended_products,
         )
 
     return app
+
+
+def _cors_allowed_origins(serving_config: dict[str, Any]) -> list[str]:
+    raw_cors = serving_config.get("cors", {})
+    cors_config = raw_cors if isinstance(raw_cors, dict) else {}
+    raw_origins = cors_config.get("allowed_origins", DEFAULT_CORS_ALLOWED_ORIGINS)
+    if isinstance(raw_origins, str):
+        origins = [origin.strip() for origin in raw_origins.split(",")]
+    elif isinstance(raw_origins, list | tuple):
+        origins = [str(origin).strip() for origin in raw_origins]
+    else:
+        origins = list(DEFAULT_CORS_ALLOWED_ORIGINS)
+
+    allowed_origins = [origin for origin in origins if origin]
+    return allowed_origins or list(DEFAULT_CORS_ALLOWED_ORIGINS)
+
+
+def _catalog_pool(app: FastAPI) -> Any:
+    pool = getattr(app.state, "pool", None)
+    if pool is None:
+        raise HTTPException(status_code=503, detail="Catalog database unavailable.")
+    return pool
 
 
 def main() -> None:

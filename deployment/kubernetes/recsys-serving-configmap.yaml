@@ -11,11 +11,15 @@ data:
       reload: false
       preload_model_on_startup: true
       default_top_k: 10
+      cors:
+        allowed_origins:
+          - http://0.0.0.0:5173
       security:
         enabled: true
         api_keys_env_var: RECSYS_API_KEYS
         public_paths:
           - /health
+          - /ready
         rate_limit_per_minute: 120
         max_body_bytes: 65536
         docs_enabled: false

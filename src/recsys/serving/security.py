@@ -15,7 +15,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 DEFAULT_API_KEYS_ENV_VAR = "RECSYS_API_KEYS"
-DEFAULT_PUBLIC_PATHS = {"/health"}
+DEFAULT_PUBLIC_PATHS = {"/health", "/ready"}
 
 
 @dataclass(frozen=True)

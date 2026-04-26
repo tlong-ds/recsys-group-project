@@ -1,5 +1,5 @@
 {
-  "artifact_path": "/private/var/folders/zg/_wfh70cn569_5p6d24bj1_tr0000gn/T/pytest-of-bunnypro/pytest-26/test_multiple_propagation_step0/models/srgnn-step3/20260420T090658Z/model.pt",
+  "artifact_path": "/private/var/folders/zg/_wfh70cn569_5p6d24bj1_tr0000gn/T/pytest-of-bunnypro/pytest-19/test_multiple_propagation_step0/models/srgnn-step3/20260426T171953Z/model.pt",
   "validation_metrics": {
     "hr@k": 1.0,
     "mrr@k": 0.5

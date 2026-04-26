@@ -26,9 +26,10 @@ Key settings:
 - `model_registry.local_cache_dir`: Optional persistent cache directory for downloaded registry artifacts.
 - `model_registry.fallback_to_filesystem`: Defaults to `false` for registry-only serving.
 - `model_path`: Optional legacy fallback path used only if filesystem fallback is explicitly enabled.
+- `cors.allowed_origins`: Browser origins allowed to call the API. Defaults to `http://0.0.0.0:5173`.
 - `security.enabled`: Require API-key auth for protected endpoints.
 - `security.api_keys_env_var`: Environment variable containing comma-separated API keys.
-- `security.public_paths`: Paths that stay public. Default: `/health`.
+- `security.public_paths`: Paths that stay public. Default: `/health` and `/ready`.
 - `security.rate_limit_per_minute`: Per-key in-memory request limit.
 - `security.max_body_bytes`: Maximum declared request body size.
 - `security.docs_enabled`: Expose or disable FastAPI docs/OpenAPI routes.
@@ -43,6 +44,9 @@ Model source note:
 - `GET /ready`: Public readiness endpoint that returns `503` when the model is unavailable.
 - `POST /recommend`: Authenticated recommendation endpoint.
 - `GET /metrics`: Authenticated Prometheus metrics endpoint.
+- `GET /products`: Authenticated product catalog endpoint.
+- `POST /views`: Authenticated user view logging endpoint.
+- `GET /evaluations`: Authenticated offline evaluation summary endpoint.
 
 When model registry loading is enabled, `/health` exposes only source metadata
 used for deployment checks (`model_source`, `model_name`, `model_version`,

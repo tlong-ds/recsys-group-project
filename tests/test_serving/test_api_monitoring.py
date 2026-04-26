@@ -31,6 +31,22 @@ class _MonitoringPredictor:
         }
 
 
+class _FailingCatalogAcquire:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def fetch(self, *_args, **_kwargs):
+        raise RuntimeError("catalog unavailable")
+
+
+class _FailingCatalogPool:
+    def acquire(self):
+        return _FailingCatalogAcquire()
+
+
 def _create_app(monkeypatch, predictor_factory):
     api_module = importlib.import_module("recsys.serving.api")
     monkeypatch.setattr(
@@ -63,6 +79,24 @@ def test_recommend_records_online_monitoring_metrics(monkeypatch) -> None:
     assert "recsys_input_sequence_length" in metrics
     assert "recsys_requested_top_k" in metrics
     assert "recsys_model_ready" in metrics
+
+
+def test_recommend_falls_back_when_catalog_metadata_lookup_fails(monkeypatch) -> None:
+    app = _create_app(monkeypatch, lambda: _MonitoringPredictor())
+    app.state.pool = _FailingCatalogPool()
+    client = TestClient(app)
+
+    response = client.post(
+        "/recommend",
+        json={"item_sequence": [1, 2], "top_k": 2},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["recommendations"] == [10, 11]
+    assert response.json()["recommended_products"] == [
+        {"id": 10, "categoryId": 0, "name": "Product 10", "price": 0.0},
+        {"id": 11, "categoryId": 0, "name": "Product 11", "price": 0.0},
+    ]
 
 
 def test_ready_returns_success_without_exposing_sensitive_metadata(monkeypatch) -> None:
