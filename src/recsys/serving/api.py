@@ -45,7 +45,6 @@ load_dotenv()
 
 DEFAULT_CONFIG_PATH = Path("configs/serving_config.yaml")
 CONFIG_ENV_VAR = "RECSYS_SERVING_CONFIG"
-DB_URL = os.getenv("NEON_DB_URL")
 
 
 # Custom metrics
@@ -130,7 +129,8 @@ def create_app(
     @app.on_event("startup")
     async def startup_event() -> None:
         # Initialize DB pool for async operations
-        app.state.pool = await asyncpg.create_pool(DB_URL, min_size=2, max_size=10)
+        db_url = os.getenv("NEON_DB_URL")
+        app.state.pool = await asyncpg.create_pool(db_url, min_size=2, max_size=10)
         app.state.view_queue = asyncio.Queue(maxsize=10000)
         
         # Start background writer task for high-throughput views
