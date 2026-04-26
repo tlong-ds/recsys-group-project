@@ -1,88 +1,133 @@
-import glob
+from __future__ import annotations
+
 import json
 import logging
-import os
 import shutil
+from pathlib import Path
+from typing import Any
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def select_best_model():
-    metrics_files = glob.glob('metrics/experiments/*/*/evaluation_metrics.json')
+EXPERIMENTS_METRICS_ROOT = Path("metrics/experiments")
+BEST_MODEL_METRICS_PATH = Path("metrics/best_model.json")
+LATEST_MODEL_TARGET = Path("models/trained/latest")
+
+
+def _extract_metric_value(metrics_payload: dict[str, Any], *keys: str) -> float:
+    """Return first matching metric value from root/test/validation metric sections."""
+    metric_sections: list[dict[str, Any]] = [
+        metrics_payload,
+        metrics_payload.get("test_metrics", {}),
+        metrics_payload.get("validation_metrics", {}),
+    ]
+
+    normalized_keys = {_normalize_metric_key(key) for key in keys}
+    for section in metric_sections:
+        if not isinstance(section, dict):
+            continue
+        for raw_key, value in section.items():
+            if _normalize_metric_key(str(raw_key)) in normalized_keys:
+                try:
+                    return float(value)
+                except (TypeError, ValueError):
+                    continue
+    return 0.0
+
+
+def _normalize_metric_key(metric_key: str) -> str:
+    return metric_key.lower().replace("-", "").replace("_", "").replace(" ", "")
+
+
+def _score_metrics(metrics_payload: dict[str, Any]) -> tuple[float, float]:
+    """Score payload as (primary, secondary) for deterministic best-model selection."""
+    primary = _extract_metric_value(metrics_payload, "hr@k")
+    secondary = _extract_metric_value(metrics_payload, "mrr@k")
+    return primary, secondary
+
+
+def _discover_evaluation_metrics(metrics_root: Path) -> list[Path]:
+    return sorted(metrics_root.glob("*/*/evaluation_metrics.json"))
+
+
+def _parse_experiment_identifiers(metrics_path: Path) -> tuple[str, str]:
+    # Expected pattern:
+    # metrics/experiments/<data_version>/<model_profile>/evaluation_metrics.json
+    rel = metrics_path.relative_to(EXPERIMENTS_METRICS_ROOT)
+    return rel.parts[0], rel.parts[1]
+
+
+def select_best_model() -> None:
+    metrics_files = _discover_evaluation_metrics(EXPERIMENTS_METRICS_ROOT)
     if not metrics_files:
-        # Also check baseline metrics if they exist
-        baseline_metrics = 'metrics/baseline/evaluation_metrics.json'
-        if os.path.exists(baseline_metrics):
-            metrics_files.append(baseline_metrics)
-        else:
-            logger.error("No evaluation metrics found.")
-            return
-
-    best_recall = -1
-    best_file = None
-    best_metrics = {}
-
-    for f in metrics_files:
-        try:
-            with open(f) as jf:
-                data = json.load(jf)
-                # Assume Recall@20 is the primary metric
-                recall = data.get('Recall@20', 0)
-                if recall > best_recall:
-                    best_recall = recall
-                    best_file = f
-                    best_metrics = data
-        except Exception as e:
-            logger.warning(f"Could not read {f}: {e}")
-
-    if not best_file:
-        logger.error("Could not find a best model.")
+        logger.error(
+            "No experiment evaluation metrics found at %s", EXPERIMENTS_METRICS_ROOT
+        )
         return
 
-    # Determine paths
-    # If experiments:
-    # metrics/experiments/<data_version>/<model_profile>/evaluation_metrics.json
-    # If baseline: metrics/baseline/evaluation_metrics.json
-    parts = best_file.split(os.sep)
-    if 'experiments' in parts:
-        data_version = parts[2]
-        model_profile = parts[3]
-        model_source_dir = f"models/experiments/{data_version}/{model_profile}/latest"
-    else:
-        data_version = "baseline"
-        model_profile = "baseline"
-        model_source_dir = "models/trained/baseline/latest"
+    best_record: dict[str, Any] | None = None
+    best_sort_key: tuple[float, float, str, str] | None = None
 
-    summary = {
-        "best_model": {
-            "data_version": data_version,
-            "model_profile": model_profile,
-            "metrics": best_metrics,
-            "source": model_source_dir
-        }
-    }
+    for metrics_file in metrics_files:
+        try:
+            payload = json.loads(metrics_file.read_text(encoding="utf-8"))
+        except Exception as exc:  # pragma: no cover
+            logger.warning("Could not read %s: %s", metrics_file, exc)
+            continue
 
-    os.makedirs('metrics', exist_ok=True)
-    with open('metrics/best_model.json', 'w') as f:
-        json.dump(summary, f, indent=4)
-    
-    logger.info(
-        f"Best model: {data_version}/{model_profile} (Recall@20: {best_recall})"
+        data_version, model_profile = _parse_experiment_identifiers(metrics_file)
+        primary, secondary = _score_metrics(payload)
+        sort_key = (primary, secondary, data_version, model_profile)
+
+        if best_sort_key is None or sort_key > best_sort_key:
+            model_source_dir = (
+                Path("models/experiments")
+                / data_version
+                / model_profile
+                / "latest"
+            )
+            best_sort_key = sort_key
+            best_record = {
+                "data_version": data_version,
+                "model_profile": model_profile,
+                "metrics": payload,
+                "source": str(model_source_dir),
+                "selection_metrics": {
+                    "primary": primary,
+                    "secondary": secondary,
+                },
+            }
+
+    if best_record is None:
+        logger.error("Could not determine the best model from evaluation metrics.")
+        return
+
+    BEST_MODEL_METRICS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    BEST_MODEL_METRICS_PATH.write_text(
+        json.dumps({"best_model": best_record}, indent=2), encoding="utf-8"
     )
 
-    # Copy to latest
-    target_dir = "models/trained/latest"
-    if os.path.exists(target_dir):
-        if os.path.islink(target_dir):
-            os.unlink(target_dir)
+    logger.info(
+        "Best model: %s/%s (primary=%.6f, secondary=%.6f)",
+        best_record["data_version"],
+        best_record["model_profile"],
+        best_record["selection_metrics"]["primary"],
+        best_record["selection_metrics"]["secondary"],
+    )
+
+    source = Path(best_record["source"])
+    if LATEST_MODEL_TARGET.exists():
+        if LATEST_MODEL_TARGET.is_symlink():
+            LATEST_MODEL_TARGET.unlink()
         else:
-            shutil.rmtree(target_dir)
-    
-    if os.path.exists(model_source_dir):
-        shutil.copytree(model_source_dir, target_dir)
-        logger.info(f"Copied {model_source_dir} to {target_dir}")
+            shutil.rmtree(LATEST_MODEL_TARGET)
+
+    if source.exists():
+        shutil.copytree(source, LATEST_MODEL_TARGET)
+        logger.info("Copied %s to %s", source, LATEST_MODEL_TARGET)
     else:
-        logger.error(f"Source model directory {model_source_dir} does not exist!")
+        logger.error("Source model directory %s does not exist.", source)
+
 
 if __name__ == "__main__":
     select_best_model()

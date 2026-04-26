@@ -1,0 +1,20 @@
+{
+  "best_model": {
+    "data_version": "v1_strict_filter",
+    "model_profile": "srgnn_fc",
+    "metrics": {
+      "model_path": "models/experiments/v1_strict_filter/srgnn_fc/latest",
+      "test_metrics": {
+        "hr@k": 0.5416249183184492,
+        "mrr@k": 0.18315839816184917
+      },
+      "data_version": "v1_strict_filter",
+      "data_params_path": null
+    },
+    "source": "models/experiments/v1_strict_filter/srgnn_fc/latest",
+    "selection_metrics": {
+      "primary": 0.5416249183184492,
+      "secondary": 0.18315839816184917
+    }
+  }
+}

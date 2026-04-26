@@ -831,7 +831,6 @@ stages:
     deps:
       - src/recsys/training/select_model.py
       - metrics/experiments
-      - metrics/baseline/evaluation_metrics.json
     outs:
       - metrics/best_model.json:
           cache: false

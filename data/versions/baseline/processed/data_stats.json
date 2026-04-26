@@ -1,0 +1,41 @@
+{
+  "build_date": "2026-04-26T11:35:30+00:00",
+  "config_file": "configs/data_config.yaml",
+  "train": {
+    "interactions": {
+      "n_interactions": 732198,
+      "n_sessions": 124181,
+      "n_items": 40357,
+      "avg_session_length": 5.896216007279697,
+      "min_session_length": 3,
+      "max_session_length": 20,
+      "median_session_length": 5
+    },
+    "examples": 608017
+  },
+  "val": {
+    "interactions": {
+      "n_interactions": 47396,
+      "n_sessions": 8126,
+      "n_items": 16331,
+      "avg_session_length": 5.832635983263598,
+      "min_session_length": 3,
+      "max_session_length": 20,
+      "median_session_length": 5
+    },
+    "examples": 39014
+  },
+  "test": {
+    "interactions": {
+      "n_interactions": 66440,
+      "n_sessions": 11359,
+      "n_items": 19139,
+      "avg_session_length": 5.849106435425654,
+      "min_session_length": 3,
+      "max_session_length": 20,
+      "median_session_length": 5
+    },
+    "examples": 54511
+  },
+  "vocab_size": 40357
+}
