@@ -1,0 +1,25 @@
+data:
+  interim_path: data/interim
+  processed_path: data/processed
+  train_examples_path: data/processed/train_examples.parquet
+  val_examples_path: data/processed/val_examples.parquet
+  test_examples_path: data/processed/test_examples.parquet
+  item_vocab_path: data/processed/item_vocab.json
+  logging:
+    report_path: data/validation_report.json
+  validation:
+    min_session_length: 3
+    min_item_frequency: 5
+    max_session_length: 20
+    allow_duplicates: true
+  temporal_split:
+    strategy: diginetica_legacy
+    test_days: 7
+    val_days: 7
+  augmentation:
+    min_prefix_length: 1
+  training_example_format: graph
+  parquet_compression: snappy
+  compatibility:
+    vocab_order: first_seen
+    example_order: reverse
