@@ -148,11 +148,47 @@ module "github_actions_role" {
   subjects = ["${var.github_repo}:*"]
 
   policies = {
-    EKS_Admin  = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+    EKS_Admin  = aws_iam_policy.github_actions_eks_admin.arn
     S3_Backend = aws_iam_policy.github_actions_s3_backend.arn
   }
 
   tags = local.tags
+}
+
+resource "aws_iam_policy" "github_actions_eks_admin" {
+  name        = "${local.name}-github-actions-eks-admin"
+  description = "Allow GitHub Actions to manage EKS cluster"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "eks:DescribeCluster",
+          "eks:ListClusters",
+          "eks:AccessKubernetesApi"
+        ]
+        Effect   = "Allow"
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_eks_access_entry" "github_actions" {
+  cluster_name      = var.eks_cluster_name
+  principal_arn     = module.github_actions_role.arn
+  type              = "STANDARD"
+}
+
+resource "aws_eks_access_policy_association" "github_actions_admin" {
+  cluster_name  = var.eks_cluster_name
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+  principal_arn = module.github_actions_role.arn
+
+  access_scope {
+    type = "cluster"
+  }
 }
 
 resource "aws_iam_policy" "github_actions_s3_backend" {
