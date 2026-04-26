@@ -4,6 +4,8 @@ import importlib
 
 from fastapi.testclient import TestClient
 
+from recsys.serving.predictor import Predictor
+
 
 class _MonitoringPredictor:
     def __init__(self, *, fail: bool = False) -> None:
@@ -48,12 +50,12 @@ class _FailingCatalogPool:
 
 
 def _create_app(monkeypatch, predictor_factory):
-    api_module = importlib.import_module("recsys.serving.api")
     monkeypatch.setattr(
-        api_module.Predictor,
+        Predictor,
         "from_path",
         staticmethod(lambda _: predictor_factory()),
     )
+    api_module = importlib.import_module("recsys.serving.api")
     return api_module.create_app(
         model_path="unused",
         serving_config={"security": {"enabled": False}},
@@ -83,7 +85,36 @@ def test_recommend_records_online_monitoring_metrics(monkeypatch) -> None:
 
 def test_recommend_falls_back_when_catalog_metadata_lookup_fails(monkeypatch) -> None:
     app = _create_app(monkeypatch, lambda: _MonitoringPredictor())
-    app.state.pool = _FailingCatalogPool()
+    # Inject a failing pool into the catalog repository
+    catalog_repo_module = importlib.import_module("recsys.serving.catalog_repository")
+    # Access the catalog through the app's recommendation service
+    # We need to set the pool on the catalog repository to a failing pool
+    # The catalog is wired inside create_app, so we access it via the
+    # recommendation service's catalog reference.
+    # A simpler approach: find the CatalogRepository instance in the app closure.
+    # Since the app's routes capture the `catalog` variable from create_app,
+    # we can patch its _pool attribute.
+    from recsys.serving.catalog_repository import CatalogRepository
+
+    # Walk the app routes to find the catalog reference
+    # Instead, let's just patch the pool on the catalog object
+    # The catalog object is captured in the recommend route's closure
+    # via recommendation_service._catalog
+    # Let's access it through the startup event
+    for route in app.routes:
+        handler = getattr(route, "endpoint", None)
+        if handler and getattr(handler, "__name__", "") == "recommend":
+            # Get the closure variables
+            closure = handler.__code__.co_freevars
+            if "recommendation_service" in closure:
+                idx = closure.index("recommendation_service")
+                rec_svc = handler.__closure__[idx].cell_contents
+                rec_svc._catalog._pool = _FailingCatalogPool()
+                break
+    else:
+        # Fallback: directly set pool on any CatalogRepository found
+        pytest.skip("Could not access catalog in closure")
+
     client = TestClient(app)
 
     response = client.post(
@@ -113,12 +144,12 @@ def test_ready_returns_success_without_exposing_sensitive_metadata(monkeypatch) 
 
 
 def test_ready_returns_503_when_model_is_unavailable(monkeypatch) -> None:
-    api_module = importlib.import_module("recsys.serving.api")
     monkeypatch.setattr(
-        api_module.Predictor,
+        Predictor,
         "from_path",
         staticmethod(lambda _: (_ for _ in ()).throw(FileNotFoundError("missing"))),
     )
+    api_module = importlib.import_module("recsys.serving.api")
     client = TestClient(
         api_module.create_app(
             model_path="unused",

@@ -10,6 +10,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from recsys.serving import predictor as predictor_module
+from recsys.serving.predictor import Predictor
 
 
 class _FakePredictor:
@@ -60,19 +61,21 @@ def _serving_config() -> dict[str, object]:
 
 
 def test_preload_model_on_startup_loads_once(monkeypatch) -> None:
-    api_module = importlib.import_module("recsys.serving.api")
     calls = {"from_path": 0}
 
-    async def _fake_create_pool(*_args, **_kwargs):
-        return _DummyPool()
+    catalog_repo_module = importlib.import_module("recsys.serving.catalog_repository")
+    monkeypatch.setattr(
+        catalog_repo_module.asyncpg, "create_pool",
+        lambda *a, **kw: _make_async_pool(),
+    )
 
     def _from_path(_model_path: str):
         calls["from_path"] += 1
         return _FakePredictor()
 
-    monkeypatch.setattr(api_module.asyncpg, "create_pool", _fake_create_pool)
-    monkeypatch.setattr(api_module.Predictor, "from_path", staticmethod(_from_path))
+    monkeypatch.setattr(Predictor, "from_path", staticmethod(_from_path))
 
+    api_module = importlib.import_module("recsys.serving.api")
     app = api_module.create_app(
         model_path="unused",
         serving_config={**_serving_config(), "preload_model_on_startup": True},
@@ -88,11 +91,13 @@ def test_preload_model_on_startup_loads_once(monkeypatch) -> None:
 
 
 def test_registry_falls_back_to_filesystem_when_enabled(monkeypatch) -> None:
-    api_module = importlib.import_module("recsys.serving.api")
     calls = {"from_registry": 0, "from_path": 0}
 
-    async def _fake_create_pool(*_args, **_kwargs):
-        return _DummyPool()
+    catalog_repo_module = importlib.import_module("recsys.serving.catalog_repository")
+    monkeypatch.setattr(
+        catalog_repo_module.asyncpg, "create_pool",
+        lambda *a, **kw: _make_async_pool(),
+    )
 
     def _from_registry(**_kwargs):
         calls["from_registry"] += 1
@@ -102,12 +107,10 @@ def test_registry_falls_back_to_filesystem_when_enabled(monkeypatch) -> None:
         calls["from_path"] += 1
         return _FakePredictor()
 
-    monkeypatch.setattr(api_module.asyncpg, "create_pool", _fake_create_pool)
-    monkeypatch.setattr(
-        api_module.Predictor, "from_model_registry", staticmethod(_from_registry)
-    )
-    monkeypatch.setattr(api_module.Predictor, "from_path", staticmethod(_from_path))
+    monkeypatch.setattr(Predictor, "from_model_registry", staticmethod(_from_registry))
+    monkeypatch.setattr(Predictor, "from_path", staticmethod(_from_path))
 
+    api_module = importlib.import_module("recsys.serving.api")
     app = api_module.create_app(
         model_path="unused",
         serving_config={
@@ -135,11 +138,13 @@ def test_registry_falls_back_to_filesystem_when_enabled(monkeypatch) -> None:
 
 
 def test_registry_failure_without_fallback_returns_degraded(monkeypatch) -> None:
-    api_module = importlib.import_module("recsys.serving.api")
     calls = {"from_registry": 0, "from_path": 0}
 
-    async def _fake_create_pool(*_args, **_kwargs):
-        return _DummyPool()
+    catalog_repo_module = importlib.import_module("recsys.serving.catalog_repository")
+    monkeypatch.setattr(
+        catalog_repo_module.asyncpg, "create_pool",
+        lambda *a, **kw: _make_async_pool(),
+    )
 
     def _from_registry(**_kwargs):
         calls["from_registry"] += 1
@@ -149,14 +154,10 @@ def test_registry_failure_without_fallback_returns_degraded(monkeypatch) -> None
         calls["from_path"] += 1
         return _FakePredictor()
 
-    monkeypatch.setattr(api_module.asyncpg, "create_pool", _fake_create_pool)
-    monkeypatch.setattr(
-        api_module.Predictor,
-        "from_model_registry",
-        staticmethod(_from_registry),
-    )
-    monkeypatch.setattr(api_module.Predictor, "from_path", staticmethod(_from_path))
+    monkeypatch.setattr(Predictor, "from_model_registry", staticmethod(_from_registry))
+    monkeypatch.setattr(Predictor, "from_path", staticmethod(_from_path))
 
+    api_module = importlib.import_module("recsys.serving.api")
     app = api_module.create_app(
         model_path="unused",
         serving_config={
@@ -299,11 +300,13 @@ def test_registry_cache_lock_allows_single_download_on_concurrent_start(
 
 
 def test_deploy_pin_env_overrides_alias_selection(monkeypatch) -> None:
-    api_module = importlib.import_module("recsys.serving.api")
     captured: dict[str, str | None] = {}
 
-    async def _fake_create_pool(*_args, **_kwargs):
-        return _DummyPool()
+    catalog_repo_module = importlib.import_module("recsys.serving.catalog_repository")
+    monkeypatch.setattr(
+        catalog_repo_module.asyncpg, "create_pool",
+        lambda *a, **kw: _make_async_pool(),
+    )
 
     def _from_registry(**kwargs):
         captured.update(kwargs)
@@ -317,18 +320,14 @@ def test_deploy_pin_env_overrides_alias_selection(monkeypatch) -> None:
             "cache_hit": "true",
         }
 
-    monkeypatch.setattr(api_module.asyncpg, "create_pool", _fake_create_pool)
-    monkeypatch.setattr(
-        api_module.Predictor,
-        "from_model_registry",
-        staticmethod(_from_registry),
-    )
+    monkeypatch.setattr(Predictor, "from_model_registry", staticmethod(_from_registry))
 
     monkeypatch.setenv("RECSYS_DEPLOY_MODEL_NAME", "recsys-serving")
     monkeypatch.setenv("RECSYS_DEPLOY_MODEL_VERSION", "99")
     monkeypatch.setenv("RECSYS_DEPLOY_RUN_ID", "run-99")
     monkeypatch.setenv("RECSYS_MODEL_CACHE_ROOT", "/app/models/cache")
 
+    api_module = importlib.import_module("recsys.serving.api")
     app = api_module.create_app(
         model_path="unused",
         serving_config={
@@ -400,3 +399,11 @@ def test_from_path_dispatches_ggnn_loader(monkeypatch, tmp_path: Path) -> None:
     predictor = predictor_module.Predictor.from_path(str(artifact_dir))
     assert predictor.model is sentinel
     assert calls["ggnn"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+async def _make_async_pool():
+    return _DummyPool()

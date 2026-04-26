@@ -5,32 +5,24 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
-import time
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-import asyncpg
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
-from loguru import logger
-from prometheus_client import (
-    CONTENT_TYPE_LATEST,
-    Counter,
-    Gauge,
-    Histogram,
-    generate_latest,
-)
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from prometheus_fastapi_instrumentator import Instrumentator
 
-from recsys.serving.predictor import Predictor
+from recsys.serving.catalog_repository import CatalogRepository, CatalogUnavailableError
+from recsys.serving.evaluations import load_evaluation_metrics
+from recsys.serving.event_sink import EventSink
+from recsys.serving.model_provider import ModelProvider
+from recsys.serving.recommendation_service import RecommendationService
 from recsys.serving.schemas import (
     EvaluationsResponse,
-    ModelMetrics,
     PaginatedProductsResponse,
-    ProductInfo,
     RecommendRequest,
     RecommendResponse,
     ViewLog,
@@ -51,57 +43,6 @@ DEFAULT_CORS_ALLOWED_ORIGINS = (
 )
 
 
-# Custom metrics
-RECSYS_RECOMMENDATIONS_TOTAL = Counter(
-    "recsys_recommendations_total", "Total number of recommendations served"
-)
-RECSYS_RECOMMENDATION_REQUESTS_TOTAL = Counter(
-    "recsys_recommendation_requests_total",
-    "Recommendation requests by outcome status",
-    ["status"],
-)
-RECSYS_OOV_ITEMS_TOTAL = Counter(
-    "recsys_oov_items_total",
-    "Total number of request items unknown to the loaded model catalog",
-)
-RECSYS_INPUT_ITEMS_TOTAL = Counter(
-    "recsys_input_items_total",
-    "Total number of input items received by the recommendation endpoint",
-)
-RECSYS_MODEL_LOAD_FAILURES_TOTAL = Counter(
-    "recsys_model_load_failures_total",
-    "Total number of failed model readiness/load checks",
-)
-RECSYS_PREDICTION_LATENCY_SECONDS = Histogram(
-    "recsys_prediction_latency_seconds",
-    "Latency of model recommendation calls",
-    buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0),
-)
-RECSYS_INPUT_SEQUENCE_LENGTH = Histogram(
-    "recsys_input_sequence_length",
-    "Length of item_sequence values received by the recommendation endpoint",
-    buckets=(1, 2, 3, 5, 10, 20, 50, 100),
-)
-RECSYS_REQUESTED_TOP_K = Histogram(
-    "recsys_requested_top_k",
-    "Requested top_k values received by the recommendation endpoint",
-    buckets=(1, 5, 10, 20, 50, 100),
-)
-RECSYS_MODEL_READY = Gauge(
-    "recsys_model_ready",
-    "Whether the serving process can load the configured model",
-)
-RECSYS_MODEL_READY.set(0)
-RECSYS_CATALOG_LOOKUP_FAILURES_TOTAL = Counter(
-    "recsys_catalog_lookup_failures_total",
-    "Total number of failed catalog metadata lookups",
-)
-RECSYS_VIEW_LOG_FAILURES_TOTAL = Counter(
-    "recsys_view_log_failures_total",
-    "Total number of failed user view log attempts",
-)
-
-
 def create_app(
     model_path: str | Path | None = None,
     serving_config: dict[str, Any] | None = None,
@@ -113,6 +54,20 @@ def create_app(
     preload_on_startup = bool(config_serving.get("preload_model_on_startup", True))
     security_settings = SecuritySettings.from_serving_config(config_serving)
     verify_api_key = auth_dependency(security_settings)
+
+    # ---- Service wiring ----
+    model_provider = ModelProvider(
+        serving_config=config_serving,
+        mlflow_config=config_mlflow,
+        model_path=model_path,
+    )
+    catalog = CatalogRepository(
+        db_url=os.getenv("NEON_DB_URL", "").strip() or None,
+    )
+    recommendation_service = RecommendationService(
+        model_provider=model_provider,
+        catalog=catalog,
+    )
 
     app = FastAPI(
         title="RecSys API",
@@ -136,166 +91,39 @@ def create_app(
     # Instrument with Prometheus
     Instrumentator().instrument(app)
 
+    # ---- Lifecycle ----
+
     @app.on_event("startup")
     async def startup_event() -> None:
-        app.state.pool = None
-        app.state.view_queue = asyncio.Queue(maxsize=10000)
-
-        db_url = os.getenv("NEON_DB_URL", "").strip()
-        if db_url:
-            try:
-                app.state.pool = await asyncpg.create_pool(
-                    db_url, min_size=2, max_size=10
-                )
-                asyncio.create_task(batch_writer_task(app))
-            except Exception as exc:
-                logger.warning("Catalog database pool initialization failed: {}", exc)
-        else:
-            logger.warning("NEON_DB_URL is not configured; catalog DB access disabled")
+        app.state.event_sink = None
+        await catalog.connect()
+        if catalog.available:
+            event_sink = EventSink(catalog.pool)
+            await event_sink.start()
+            app.state.event_sink = event_sink
 
         if preload_on_startup:
-            preload_model()
+            model_provider.preload()
 
     @app.on_event("shutdown")
     async def shutdown_event() -> None:
-        pool = getattr(app.state, "pool", None)
-        if pool is not None:
-            await pool.close()
+        await catalog.close()
 
-    async def batch_writer_task(app: FastAPI) -> None:
-        """Background task to batch write user views to DB without blocking the API."""
-        while True:
-            batch = []
-            try:
-                # Wait for first item to arrive
-                view = await app.state.view_queue.get()
-                batch.append(view)
-
-                # Collect more items for up to 1 second or until batch size 1000
-                start_collect = time.time()
-                while len(batch) < 1000 and (time.time() - start_collect) < 1.0:
-                    try:
-                        view = app.state.view_queue.get_nowait()
-                        batch.append(view)
-                    except asyncio.QueueEmpty:
-                        await asyncio.sleep(0.1)
-
-                if batch:
-                    async with app.state.pool.acquire() as conn:
-                        query = (
-                            "INSERT INTO user_views "
-                            '("sessionId", "userId", "itemId", timeframe, eventdate) '
-                            "VALUES ($1, $2, $3, $4, $5)"
-                        )
-                        values = [
-                            (
-                                v.sessionId,
-                                v.userId,
-                                v.itemId,
-                                v.timeframe or int(time.time() * 1000),
-                                v.eventdate or time.strftime("%Y-%m-%d"),
-                            )
-                            for v in batch
-                        ]
-                        await conn.executemany(query, values)
-            except Exception as exc:
-                RECSYS_VIEW_LOG_FAILURES_TOTAL.inc(len(batch) or 1)
-                logger.exception("Failed to batch write user views: {}", exc)
-
-            # Yield control to prevent CPU spinning if queue was empty
-            await asyncio.sleep(0.5)
+    # ---- Routes ----
 
     @app.get("/metrics", include_in_schema=False)
     def metrics(_: str | None = Depends(verify_api_key)) -> Response:
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
-    @lru_cache(maxsize=1)
-    def get_predictor_bundle() -> tuple[Predictor, dict[str, str]]:
-        registry_cfg = config_serving.get("model_registry", {})
-        if isinstance(registry_cfg, dict) and bool(registry_cfg.get("enabled", False)):
-            deploy_overrides = _deploy_registry_overrides()
-            model_name = str(
-                deploy_overrides.get("model_name")
-                or registry_cfg.get("model_name", "recsys-serving")
-            )
-            model_alias = (
-                registry_cfg.get("model_alias")
-                if not deploy_overrides.get("model_version")
-                else None
-            )
-            model_version = deploy_overrides.get("model_version") or registry_cfg.get(
-                "model_version"
-            )
-            run_id = deploy_overrides.get("run_id")
-            artifact_path = str(registry_cfg.get("artifact_path", "registered_model"))
-            cache_dir = (
-                os.getenv("RECSYS_MODEL_CACHE_ROOT")
-                or deploy_overrides.get("cache_root")
-                or registry_cfg.get("local_cache_dir")
-            )
-            try:
-                return Predictor.from_model_registry(
-                    mlflow_config=config_mlflow,
-                    model_name=model_name,
-                    model_alias=str(model_alias) if model_alias else None,
-                    model_version=str(model_version) if model_version else None,
-                    run_id=str(run_id) if run_id else None,
-                    artifact_path=artifact_path,
-                    cache_dir=str(cache_dir) if cache_dir else None,
-                )
-            except Exception:
-                if not bool(registry_cfg.get("fallback_to_filesystem", True)):
-                    raise
-
-        resolved_model_path = _resolve_model_path(
-            explicit_model_path=model_path,
-            serving_config=config_serving,
-        )
-        predictor = Predictor.from_path(resolved_model_path)
-        return predictor, {
-            "source": "filesystem",
-            "artifact_path": resolved_model_path,
-            "model_name": "",
-            "model_version": "",
-            "run_id": "",
-        }
-
-    @app.on_event("startup")
-    def preload_model() -> None:
-        if not preload_on_startup:
-            return
-        try:
-            get_predictor_bundle()
-            app.state.model_preload_error = ""
-            RECSYS_MODEL_READY.set(1)
-        except Exception as exc:
-            # Keep the app bootable; /health will report degraded if load still fails.
-            app.state.model_preload_error = str(exc)
-            RECSYS_MODEL_READY.set(0)
-            RECSYS_MODEL_LOAD_FAILURES_TOTAL.inc()
-
     @app.get("/health")
     def health() -> dict[str, str]:
-        try:
-            _, meta = get_predictor_bundle()
-            RECSYS_MODEL_READY.set(1)
-            return _model_status_payload("ok", meta)
-        except Exception:
-            RECSYS_MODEL_READY.set(0)
-            return {
-                "status": "degraded",
-                "model_source": "unavailable",
-            }
+        return model_provider.health_payload()
 
     @app.get("/ready")
     def ready() -> dict[str, str]:
         try:
-            _, meta = get_predictor_bundle()
-            RECSYS_MODEL_READY.set(1)
-            return _model_status_payload("ready", meta)
+            return model_provider.readiness_payload()
         except Exception as exc:
-            RECSYS_MODEL_READY.set(0)
-            RECSYS_MODEL_LOAD_FAILURES_TOTAL.inc()
             raise HTTPException(
                 status_code=503,
                 detail="Model unavailable.",
@@ -305,50 +133,7 @@ def create_app(
     def get_evaluations(
         _: str | None = Depends(verify_api_key),
     ) -> EvaluationsResponse:
-        import json
-
-        experiments_dir = Path("models/experiments")
-        results: list[ModelMetrics] = []
-        if not experiments_dir.exists():
-            return EvaluationsResponse(metrics=results)
-
-        for data_version_dir in experiments_dir.iterdir():
-            if not data_version_dir.is_dir():
-                continue
-            for model_dir in data_version_dir.iterdir():
-                if not model_dir.is_dir():
-                    continue
-                metrics_file = model_dir / "latest" / "metrics.json"
-                if metrics_file.exists():
-                    try:
-                        with open(metrics_file) as f:
-                            metrics = json.load(f)
-
-                        profile = model_dir.name.upper()
-                        if profile.startswith("SRGNN_"):
-                            profile = f"SR-GNN ({profile.split('_')[1].upper()})"
-                        elif profile == "SRGNN":
-                            profile = "SR-GNN"
-                        elif profile == "TAGNN":
-                            profile = "TAGNN"
-                        elif profile == "GGNN":
-                            profile = "GGNN"
-
-                        results.append(
-                            ModelMetrics(
-                                profile=profile,
-                                dataVersion=data_version_dir.name,
-                                hrAtK=metrics.get("hr@k", 0.0),
-                                mrrAtK=metrics.get("mrr@k", 0.0),
-                            )
-                        )
-                    except Exception as exc:
-                        logger.warning(
-                            "Failed to load metrics for {}: {}",
-                            model_dir.name,
-                            exc,
-                        )
-
+        results = load_evaluation_metrics(Path("models/experiments"))
         return EvaluationsResponse(metrics=results)
 
     @app.get("/products", response_model=PaginatedProductsResponse)
@@ -359,55 +144,12 @@ def create_app(
         _: str | None = Depends(verify_api_key),
     ) -> PaginatedProductsResponse:
         """Fetch the product catalog from the database with offset-based pagination."""
-        pool = _catalog_pool(app)
-        async with pool.acquire() as conn:
-            where_clauses = []
-            params = []
-
-            if category_id is not None:
-                where_clauses.append(f'pc."categoryId" = ${len(params) + 1}')
-                params.append(category_id)
-
-            where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
-
-            # Get total count for pagination metadata
-            count_query = (
-                f"SELECT COUNT(*) FROM products p "
-                f'JOIN product_categories pc ON p."itemId" = pc."itemId" '
-                f"{where_sql}"  # nosec B608
+        try:
+            return await catalog.list_products(
+                page=page, page_size=page_size, category_id=category_id
             )
-            total_count = await conn.fetchval(count_query, *params)
-
-            offset = (page - 1) * page_size
-            limit_param = f"${len(params) + 1}"
-            params.append(page_size)
-            offset_param = f"${len(params) + 1}"
-            params.append(offset)
-
-            query = (
-                'SELECT p."itemId" as "id", pc."categoryId" as "categoryId", '
-                'p.product_name_tokens as "name", '
-                '(POWER(2, p.pricelog2) - 1) as "price" '
-                "FROM products p "
-                'JOIN product_categories pc ON p."itemId" = pc."itemId" '
-                f"{where_sql} "  # nosec B608
-                'ORDER BY p."itemId" ASC '
-                f"LIMIT {limit_param} OFFSET {offset_param}"  # nosec B608
-            )
-
-            rows = await conn.fetch(query, *params)
-            items = [ProductInfo(**dict(row)) for row in rows]
-
-            # In offset-based, we return next_page instead of cursor
-            next_page = page + 1 if offset + len(items) < total_count else None
-            total_pages = (total_count + page_size - 1) // page_size
-
-            return PaginatedProductsResponse(
-                items=items,
-                total_pages=total_pages,
-                current_page=page,
-                next_cursor=next_page,
-            )
+        except CatalogUnavailableError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     @app.post("/views", status_code=202)
     async def log_view(
@@ -415,14 +157,16 @@ def create_app(
         _: str | None = Depends(verify_api_key),
     ) -> dict[str, str]:
         """Asynchronously log a user item view to the batch queue."""
-        if getattr(app.state, "pool", None) is None:
+        event_sink: EventSink | None = getattr(app.state, "event_sink", None)
+        if event_sink is None:
+            from recsys.serving.event_sink import RECSYS_VIEW_LOG_FAILURES_TOTAL
+
             RECSYS_VIEW_LOG_FAILURES_TOTAL.inc()
             raise HTTPException(status_code=503, detail="Catalog database unavailable.")
         try:
-            app.state.view_queue.put_nowait(view)
+            event_sink.enqueue(view)
             return {"status": "accepted"}
         except asyncio.QueueFull:
-            RECSYS_VIEW_LOG_FAILURES_TOTAL.inc()
             raise HTTPException(
                 status_code=503, detail="Server is too busy to process view logs."
             )
@@ -430,109 +174,31 @@ def create_app(
     @app.post("/recommend", response_model=RecommendResponse)
     async def recommend(
         request: RecommendRequest,
-        api_request: Request,
         _: str | None = Depends(verify_api_key),
     ) -> RecommendResponse:
-        latency_start: float | None = None
         try:
-            predictor, _ = get_predictor_bundle()
-            RECSYS_MODEL_READY.set(1)
-            quality = predictor.input_quality(request.item_sequence)
-            sequence_length = int(quality["sequence_length"])
-            unknown_items = int(quality["unknown_items"])
-            RECSYS_INPUT_SEQUENCE_LENGTH.observe(sequence_length)
-            RECSYS_REQUESTED_TOP_K.observe(request.top_k)
-            RECSYS_INPUT_ITEMS_TOTAL.inc(sequence_length)
-            RECSYS_OOV_ITEMS_TOTAL.inc(unknown_items)
-
-            latency_start = time.perf_counter()
-            recommendations = predictor.get_recommendations(
-                request.item_sequence,
-                top_k=request.top_k,
+            result = await recommendation_service.recommend(
+                request.item_sequence, request.top_k
             )
-
-            # Fetch metadata for recommendations
-            recommended_products = []
-            if recommendations:
-                try:
-                    pool = _catalog_pool(api_request.app)
-                    async with pool.acquire() as conn:
-                        rows = await conn.fetch(
-                            'SELECT p."itemId" as "id", pc."categoryId" '
-                            'as "categoryId", '
-                            'p.product_name_tokens as "name", '
-                            '(POWER(2, p.pricelog2) - 1) as "price" '
-                            "FROM products p "
-                            'JOIN product_categories pc ON p."itemId" = pc."itemId" '
-                            'WHERE p."itemId" = ANY($1)',
-                            recommendations,
-                        )
-                        # Maintain order of recommendations
-                        metadata_map = {row["id"]: row for row in rows}
-                        for r_id in recommendations:
-                            if r_id in metadata_map:
-                                row = metadata_map[r_id]
-                                recommended_products.append(
-                                    ProductInfo(
-                                        id=row["id"],
-                                        categoryId=row["categoryId"],
-                                        name=row["name"],
-                                        price=row["price"],
-                                    )
-                                )
-                            else:
-                                # Fallback if metadata missing
-                                recommended_products.append(
-                                    ProductInfo(
-                                        id=r_id,
-                                        categoryId=0,
-                                        name=f"Product {r_id}",
-                                        price=0.0,
-                                    )
-                                )
-                except Exception as db_err:
-                    RECSYS_CATALOG_LOOKUP_FAILURES_TOTAL.inc()
-                    logger.warning(
-                        "Falling back to recommendation IDs after catalog lookup "
-                        "failure: {}",
-                        db_err,
-                    )
-                    recommended_products = [
-                        ProductInfo(
-                            id=r_id, categoryId=0, name=f"Product {r_id}", price=0.0
-                        )
-                        for r_id in recommendations
-                    ]
-
-            # Track business metrics
-            RECSYS_RECOMMENDATIONS_TOTAL.inc()
-            RECSYS_RECOMMENDATION_REQUESTS_TOTAL.labels(status="success").inc()
         except FileNotFoundError as exc:
-            RECSYS_MODEL_READY.set(0)
-            RECSYS_MODEL_LOAD_FAILURES_TOTAL.inc()
-            RECSYS_RECOMMENDATION_REQUESTS_TOTAL.labels(
-                status="model_unavailable"
-            ).inc()
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         except Exception as exc:
-            RECSYS_RECOMMENDATION_REQUESTS_TOTAL.labels(status="error").inc()
             raise HTTPException(
-                status_code=500,
-                detail="Recommendation failed.",
+                status_code=500, detail="Recommendation failed."
             ) from exc
-        finally:
-            if latency_start is not None:
-                RECSYS_PREDICTION_LATENCY_SECONDS.observe(
-                    time.perf_counter() - latency_start
-                )
         return RecommendResponse(
             session_id=request.session_id,
             item_sequence=request.item_sequence,
-            recommendations=recommendations,
-            recommended_products=recommended_products,
+            recommendations=result.recommendations,
+            recommended_products=result.recommended_products,
         )
 
     return app
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _cors_allowed_origins(serving_config: dict[str, Any]) -> list[str]:
@@ -548,13 +214,6 @@ def _cors_allowed_origins(serving_config: dict[str, Any]) -> list[str]:
 
     allowed_origins = [origin for origin in origins if origin]
     return allowed_origins or list(DEFAULT_CORS_ALLOWED_ORIGINS)
-
-
-def _catalog_pool(app: FastAPI) -> Any:
-    pool = getattr(app.state, "pool", None)
-    if pool is None:
-        raise HTTPException(status_code=503, detail="Catalog database unavailable.")
-    return pool
 
 
 def main() -> None:
@@ -593,52 +252,6 @@ def main() -> None:
         reload=reload_flag,
         factory=reload_flag,
     )
-
-
-def _resolve_model_path(
-    *,
-    explicit_model_path: str | Path | None = None,
-    serving_config: dict[str, Any] | None = None,
-) -> str:
-    env_path = os.getenv("RECSYS_MODEL_PATH", "").strip()
-    if env_path:
-        return env_path
-    if explicit_model_path:
-        return str(explicit_model_path)
-    cfg_path = (
-        str((serving_config or {}).get("model_path", "")).strip()
-        if isinstance(serving_config, dict)
-        else ""
-    )
-    if cfg_path:
-        return cfg_path
-    if DEFAULT_CONFIG_PATH.exists():
-        config = load_config(DEFAULT_CONFIG_PATH)
-        discovered = str(config.get("serving", {}).get("model_path", "")).strip()
-        if discovered:
-            return discovered
-    raise ValueError(
-        "Filesystem model loading requested, but no serving.model_path was configured."
-    )
-
-
-def _deploy_registry_overrides() -> dict[str, str]:
-    return {
-        "model_name": os.getenv("RECSYS_DEPLOY_MODEL_NAME", "").strip(),
-        "model_version": os.getenv("RECSYS_DEPLOY_MODEL_VERSION", "").strip(),
-        "run_id": os.getenv("RECSYS_DEPLOY_RUN_ID", "").strip(),
-        "cache_root": os.getenv("RECSYS_MODEL_CACHE_ROOT", "").strip(),
-    }
-
-
-def _model_status_payload(status: str, meta: dict[str, str]) -> dict[str, str]:
-    return {
-        "status": status,
-        "model_source": meta.get("source", ""),
-        "model_name": meta.get("model_name", ""),
-        "model_version": meta.get("model_version", ""),
-        "run_id": meta.get("run_id", ""),
-    }
 
 
 def create_default_app() -> FastAPI:

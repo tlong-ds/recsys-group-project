@@ -24,12 +24,13 @@ class FakePredictor:
 
 def _app(monkeypatch, *, rate_limit_per_minute: int = 120, max_body_bytes: int = 65536):
     monkeypatch.setenv("RECSYS_API_KEYS", "test-key,rotated-key")
-    api_module = importlib.import_module("recsys.serving.api")
+    predictor_module = importlib.import_module("recsys.serving.predictor")
     monkeypatch.setattr(
-        api_module.Predictor,
+        predictor_module.Predictor,
         "from_path",
         staticmethod(lambda _: FakePredictor()),
     )
+    api_module = importlib.import_module("recsys.serving.api")
     return api_module.create_app(
         model_path="unused",
         serving_config={
