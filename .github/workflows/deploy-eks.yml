@@ -67,6 +67,16 @@ jobs:
       - name: Configure kubeconfig
         run: aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deploy-time Python deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install mlflow dagshub pyyaml
+
       - name: Ensure namespace
         run: kubectl create namespace recsys --dry-run=client -o yaml | kubectl apply -f -
 
@@ -83,6 +93,7 @@ jobs:
           kubectl -n recsys create secret generic recsys-secrets \
             --from-literal=api-keys='${{ secrets.RECSYS_API_KEYS }}' \
             --from-literal=dagshub-user-token='${{ secrets.DAGSHUB_USER_TOKEN }}' \
+            --from-literal=neon-db-url='${{ secrets.NEON_DB_URL }}' \
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Create monitoring secrets
@@ -92,16 +103,124 @@ jobs:
             --from-literal=grafana-admin-password='${{ secrets.GRAFANA_ADMIN_PASSWORD }}' \
             --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Apply model-cache prerequisites
+        run: |
+          kubectl apply -f deployment/kubernetes/api-service-account.yaml
+          kubectl apply -f deployment/kubernetes/recsys-serving-configmap.yaml
+          kubectl apply -f deployment/kubernetes/recsys-model-cache-pvc.yaml
+          kubectl -n recsys wait --for=jsonpath='{.status.phase}'=Bound pvc/recsys-model-cache --timeout=10m
+
+      - name: Resolve production model pin
+        id: model_pin
+        env:
+          PYTHONPATH: src
+          DAGSHUB_USER_TOKEN: ${{ secrets.DAGSHUB_USER_TOKEN }}
+        run: |
+          python - <<'PY'
+          import os
+          from mlflow.tracking import MlflowClient
+          from recsys.training.tracking import configure_tracking
+          from recsys.utils.config import load_config
+
+          cfg = load_config("configs/serving_config.yaml")
+          serving_cfg = cfg.get("serving", {})
+          registry_cfg = serving_cfg.get("model_registry", {})
+          mlflow_cfg = cfg.get("mlflow", {})
+
+          model_name = str(registry_cfg.get("model_name", "recsys-serving"))
+          model_alias = str(registry_cfg.get("model_alias", "Production"))
+
+          configure_tracking({"mlflow": mlflow_cfg})
+          client = MlflowClient()
+          version = client.get_model_version_by_alias(model_name, model_alias)
+
+          model_version = str(version.version)
+          run_id = str(version.run_id)
+
+          print(
+              f"Resolved {model_name}@{model_alias} -> version={model_version}, run_id={run_id}"
+          )
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
+              handle.write(f"model_name={model_name}\n")
+              handle.write(f"model_alias={model_alias}\n")
+              handle.write(f"model_version={model_version}\n")
+              handle.write(f"run_id={run_id}\n")
+          PY
+
+      - name: Run model prewarm job
+        env:
+          MODEL_NAME: ${{ steps.model_pin.outputs.model_name }}
+          MODEL_VERSION: ${{ steps.model_pin.outputs.model_version }}
+          RUN_ID: ${{ steps.model_pin.outputs.run_id }}
+        run: |
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE_REF="ghcr.io/${REPO_LOWER}:${DEPLOY_IMAGE_TAG}"
+          JOB_NAME="recsys-model-prewarm-${MODEL_VERSION}-${{ github.run_id }}"
+
+          sed \
+            -e "s|__RECSYS_PREWARM_JOB_NAME__|${JOB_NAME}|g" \
+            -e "s|__RECSYS_API_IMAGE__|${IMAGE_REF}|g" \
+            -e "s|__RECSYS_DEPLOY_MODEL_NAME__|${MODEL_NAME}|g" \
+            -e "s|__RECSYS_DEPLOY_MODEL_VERSION__|${MODEL_VERSION}|g" \
+            -e "s|__RECSYS_DEPLOY_RUN_ID__|${RUN_ID}|g" \
+            deployment/kubernetes/recsys-model-prewarm-job.yaml > /tmp/recsys-model-prewarm-job.yaml
+
+          kubectl -n recsys delete job "${JOB_NAME}" --ignore-not-found=true
+          kubectl apply -f /tmp/recsys-model-prewarm-job.yaml
+          kubectl -n recsys wait --for=condition=Complete --timeout=15m "job/${JOB_NAME}" || {
+            kubectl -n recsys logs "job/${JOB_NAME}" --tail=-1 || true
+            exit 1
+          }
+
+      - name: Inject pinned model env into deployment manifest
+        env:
+          MODEL_NAME: ${{ steps.model_pin.outputs.model_name }}
+          MODEL_VERSION: ${{ steps.model_pin.outputs.model_version }}
+          RUN_ID: ${{ steps.model_pin.outputs.run_id }}
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          import yaml
+
+          path = Path("deployment/kubernetes/api-deployment.yaml")
+          payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+          pod_spec = payload["spec"]["template"]["spec"]
+
+          updates = {
+              "RECSYS_MODEL_CACHE_ROOT": "/app/models/cache",
+              "RECSYS_DEPLOY_MODEL_NAME": os.environ["MODEL_NAME"],
+              "RECSYS_DEPLOY_MODEL_VERSION": os.environ["MODEL_VERSION"],
+              "RECSYS_DEPLOY_RUN_ID": os.environ["RUN_ID"],
+          }
+
+          for key in ("initContainers", "containers"):
+              for container in pod_spec.get(key, []):
+                  env = container.setdefault("env", [])
+                  index = {
+                      item.get("name"): i
+                      for i, item in enumerate(env)
+                      if isinstance(item, dict) and item.get("name")
+                  }
+                  for name, value in updates.items():
+                      replacement = {"name": name, "value": value}
+                      if name in index:
+                          env[index[name]] = replacement
+                      else:
+                          env.append(replacement)
+
+          path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+          PY
+
       - name: Deploy manifests
         run: |
           cd deployment/kubernetes
-          # Map the hardcoded image in the deployment to the dynamic GHCR image
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           kustomize edit set image ghcr.io/tlong-ds/recsys-group-project=ghcr.io/${REPO_LOWER}:${DEPLOY_IMAGE_TAG}
           kubectl apply -k .
 
       - name: Wait for rollouts
         run: |
-          kubectl -n recsys rollout status deployment/recsys-api --timeout=5m
+          kubectl -n recsys rollout status deployment/recsys-api --timeout=10m
           kubectl -n recsys rollout status deployment/prometheus --timeout=5m
           kubectl -n recsys rollout status deployment/grafana --timeout=5m

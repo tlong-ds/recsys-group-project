@@ -15,7 +15,7 @@ serving:
     docs_enabled: false
   model_registry:
     enabled: true
-    model_name: recsys-srgnn
+    model_name: recsys-serving
     model_alias: Production
     model_version: ""
     artifact_path: registered_model

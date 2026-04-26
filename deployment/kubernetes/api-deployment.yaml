@@ -7,6 +7,11 @@ metadata:
     app: recsys-api
 spec:
   replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app: recsys-api
@@ -44,23 +49,21 @@ spec:
           imagePullPolicy: Always
           command:
             - python3
-            - "-c"
-            - |
-              import os
-              from recsys.serving.predictor import Predictor
-              from recsys.utils.config import load_config
-              cfg = load_config('/app/configs/serving_config.yaml')
-              mlflow_cfg = cfg.get('mlflow', {})
-              reg_cfg = cfg.get('serving', {}).get('model_registry', {})
-              print(f"Downloading model {reg_cfg.get('model_name')} (alias: {reg_cfg.get('model_alias')})...")
-              Predictor.from_model_registry(
-                  mlflow_config=mlflow_cfg,
-                  model_name=reg_cfg.get('model_name'),
-                  model_alias=reg_cfg.get('model_alias'),
-                  cache_dir='/app/models/cache'
-              )
-              print("Download complete.")
+            - -m
+            - recsys.serving.cache_warmup
+            - --config
+            - /app/configs/serving_config.yaml
           env:
+            - name: RECSYS_SERVING_CONFIG
+              value: /app/configs/serving_config.yaml
+            - name: RECSYS_MODEL_CACHE_ROOT
+              value: /app/models/cache
+            - name: RECSYS_DEPLOY_MODEL_NAME
+              value: ""
+            - name: RECSYS_DEPLOY_MODEL_VERSION
+              value: ""
+            - name: RECSYS_DEPLOY_RUN_ID
+              value: ""
             - name: DAGSHUB_USER_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -83,6 +86,19 @@ spec:
           env:
             - name: RECSYS_SERVING_CONFIG
               value: /app/configs/serving_config.yaml
+            - name: RECSYS_MODEL_CACHE_ROOT
+              value: /app/models/cache
+            - name: RECSYS_DEPLOY_MODEL_NAME
+              value: ""
+            - name: RECSYS_DEPLOY_MODEL_VERSION
+              value: ""
+            - name: RECSYS_DEPLOY_RUN_ID
+              value: ""
+            - name: NEON_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: recsys-secrets
+                  key: neon-db-url
             - name: RECSYS_API_KEYS
               valueFrom:
                 secretKeyRef:
@@ -134,4 +150,5 @@ spec:
         - name: tmp-volume
           emptyDir: {}
         - name: model-cache
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: recsys-model-cache

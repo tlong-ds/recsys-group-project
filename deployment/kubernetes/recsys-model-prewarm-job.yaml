@@ -1,0 +1,64 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: __RECSYS_PREWARM_JOB_NAME__
+  namespace: recsys
+  labels:
+    app: recsys-model-prewarm
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: recsys-model-prewarm
+    spec:
+      restartPolicy: Never
+      serviceAccountName: recsys-api
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: prewarm
+          image: __RECSYS_API_IMAGE__
+          imagePullPolicy: Always
+          command:
+            - python3
+            - -m
+            - recsys.serving.cache_warmup
+            - --config
+            - /app/configs/serving_config.yaml
+            - --strict
+          env:
+            - name: RECSYS_SERVING_CONFIG
+              value: /app/configs/serving_config.yaml
+            - name: RECSYS_MODEL_CACHE_ROOT
+              value: /app/models/cache
+            - name: RECSYS_DEPLOY_MODEL_NAME
+              value: __RECSYS_DEPLOY_MODEL_NAME__
+            - name: RECSYS_DEPLOY_MODEL_VERSION
+              value: __RECSYS_DEPLOY_MODEL_VERSION__
+            - name: RECSYS_DEPLOY_RUN_ID
+              value: __RECSYS_DEPLOY_RUN_ID__
+            - name: DAGSHUB_USER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: recsys-secrets
+                  key: dagshub-user-token
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/configs/serving_config.yaml
+              subPath: serving_config.yaml
+              readOnly: true
+            - name: model-cache
+              mountPath: /app/models/cache
+      volumes:
+        - name: config-volume
+          configMap:
+            name: recsys-serving-config
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: recsys-model-cache

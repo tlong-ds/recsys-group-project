@@ -195,17 +195,34 @@ def create_app(
     def get_predictor_bundle() -> tuple[Predictor, dict[str, str]]:
         registry_cfg = config_serving.get("model_registry", {})
         if isinstance(registry_cfg, dict) and bool(registry_cfg.get("enabled", False)):
-            model_name = str(registry_cfg.get("model_name", "recsys-srgnn"))
-            model_alias = registry_cfg.get("model_alias")
-            model_version = registry_cfg.get("model_version")
+            deploy_overrides = _deploy_registry_overrides()
+            model_name = str(
+                deploy_overrides.get("model_name")
+                or registry_cfg.get("model_name", "recsys-serving")
+            )
+            model_alias = (
+                registry_cfg.get("model_alias")
+                if not deploy_overrides.get("model_version")
+                else None
+            )
+            model_version = (
+                deploy_overrides.get("model_version")
+                or registry_cfg.get("model_version")
+            )
+            run_id = deploy_overrides.get("run_id")
             artifact_path = str(registry_cfg.get("artifact_path", "registered_model"))
-            cache_dir = registry_cfg.get("local_cache_dir")
+            cache_dir = (
+                os.getenv("RECSYS_MODEL_CACHE_ROOT")
+                or deploy_overrides.get("cache_root")
+                or registry_cfg.get("local_cache_dir")
+            )
             try:
                 return Predictor.from_model_registry(
                     mlflow_config=config_mlflow,
                     model_name=model_name,
                     model_alias=str(model_alias) if model_alias else None,
                     model_version=str(model_version) if model_version else None,
+                    run_id=str(run_id) if run_id else None,
                     artifact_path=artifact_path,
                     cache_dir=str(cache_dir) if cache_dir else None,
                 )
@@ -525,6 +542,15 @@ def _resolve_model_path() -> str:
         config = load_config(DEFAULT_CONFIG_PATH)
         return config.get("serving", {}).get("model_path", "models/trained/latest/")
     return "models/trained/latest/"
+
+
+def _deploy_registry_overrides() -> dict[str, str]:
+    return {
+        "model_name": os.getenv("RECSYS_DEPLOY_MODEL_NAME", "").strip(),
+        "model_version": os.getenv("RECSYS_DEPLOY_MODEL_VERSION", "").strip(),
+        "run_id": os.getenv("RECSYS_DEPLOY_RUN_ID", "").strip(),
+        "cache_root": os.getenv("RECSYS_MODEL_CACHE_ROOT", "").strip(),
+    }
 
 
 def _model_status_payload(status: str, meta: dict[str, str]) -> dict[str, str]:

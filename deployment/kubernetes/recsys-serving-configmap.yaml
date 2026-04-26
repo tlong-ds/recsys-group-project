@@ -21,12 +21,12 @@ data:
         max_body_bytes: 65536
         docs_enabled: false
       model_registry:
-        enabled: false
-        model_name: recsys-srgnn
+        enabled: true
+        model_name: recsys-serving
         model_alias: Production
         model_version: ""
         artifact_path: registered_model
-        local_cache_dir: .cache/recsys_registry
+        local_cache_dir: /app/models/cache
         fallback_to_filesystem: true
 
     mlflow:
@@ -38,4 +38,3 @@ data:
         token_env_var: DAGSHUB_USER_TOKEN
         repo_owner: lytlong.pers
         repo_name: recsys-group-project
-

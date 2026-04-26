@@ -6,6 +6,7 @@ resources:
   - namespace.yaml
   - api-service-account.yaml
   - recsys-serving-configmap.yaml
+  - recsys-model-cache-pvc.yaml
   - api-deployment.yaml
   - api-service.yaml
   - api-hpa.yaml

@@ -222,6 +222,38 @@ If you want serving to load promoted registry models directly, enable
 `serving.model_registry.enabled` and set `serving.model_registry.model_name` /
 `model_alias` in serving config.
 
+## Prewarm rollout verification harness
+
+Use the built-in verifier to confirm the prewarm job and a multi-pod rollout
+are consistent for one pinned model release:
+
+```bash
+scripts/verify_model_prewarm_rollout.sh
+```
+
+What it checks:
+
+1. `deployment/recsys-api` rollout is complete.
+2. Deployment env vars are pinned (`RECSYS_DEPLOY_MODEL_NAME`,
+   `RECSYS_DEPLOY_MODEL_VERSION`, `RECSYS_DEPLOY_RUN_ID`,
+   `RECSYS_MODEL_CACHE_ROOT`).
+3. The latest prewarm Job (`app=recsys-model-prewarm`) completed and logged the
+   same pinned model/version/run ID.
+4. At least two ready API pods have `model-downloader` init logs with
+   `'status': 'hit'` and matching model/version/run ID.
+
+Optional flags:
+
+```bash
+scripts/verify_model_prewarm_rollout.sh \
+  --namespace recsys \
+  --deployment recsys-api \
+  --label-selector app=recsys-api \
+  --prewarm-job recsys-model-prewarm-<version>-<runid> \
+  --required-pods 2 \
+  --timeout-seconds 900
+```
+
 ## Operations runbook (EKS + CT)
 
 1. **Bootstrap**

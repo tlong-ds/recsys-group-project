@@ -38,3 +38,6 @@ domain_filters  = ["example.com"]
 tags = {
   Owner = "ml-platform"
 }
+
+enable_efs_model_cache = true
+efs_storage_class_name = "recsys-efs-sc"

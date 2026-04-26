@@ -11,7 +11,7 @@ provider "kubernetes" {
     api_version = "client.authentication.k8s.io/v1"
     command     = "aws"
     # Added --region to ensure the token is generated for the correct endpoint
-    args        = ["eks", "get-token", "--cluster-name", var.eks_cluster_name, "--region", var.aws_region]
+    args = ["eks", "get-token", "--cluster-name", var.eks_cluster_name, "--region", var.aws_region]
   }
 }
 

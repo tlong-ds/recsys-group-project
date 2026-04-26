@@ -41,3 +41,21 @@ variable "private_subnet_ids" {
   type        = list(string)
   default     = []
 }
+
+variable "enable_efs_model_cache" {
+  description = "Enable EFS-backed RWX storage for model cache sharing across pods."
+  type        = bool
+  default     = true
+}
+
+variable "efs_storage_class_name" {
+  description = "Kubernetes storage class name for shared model cache PVCs."
+  type        = string
+  default     = "recsys-efs-sc"
+}
+
+variable "efs_transition_to_ia" {
+  description = "Lifecycle transition for EFS files not accessed recently."
+  type        = string
+  default     = "AFTER_30_DAYS"
+}
