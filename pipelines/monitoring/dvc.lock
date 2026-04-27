@@ -1,12 +1,10 @@
 schema: '2.0'
 stages:
   drift_v1_vs_v2:
-    cmd: 'python -m recsys.monitoring.drift --reference data/versions/v1_strict_filter/interim/train_interactions.parquet
+    cmd: "python -m recsys.monitoring.drift --reference data/versions/v1_strict_filter/interim/train_interactions.parquet
       --current data/versions/v2_sliding_window/interim/test_interactions.parquet
       --vocab data/versions/v1_strict_filter/processed/item_vocab.json --output metrics/monitoring/drift_v1_vs_v2.json
-      --html reports/monitoring/evidently_v1_vs_v2.html
-
-      '
+      --html reports/monitoring/evidently_v1_vs_v2.html\n"
     deps:
     - path: data/versions/v1_strict_filter/interim/train_interactions.parquet
       hash: md5
@@ -41,3 +39,38 @@ stages:
       hash: md5
       md5: b3dde5831b5d732846ac9a7fbffc0fbc
       size: 298
+  drift_synthetic_oov:
+    cmd: "python -m recsys.monitoring.drift --reference data/versions/v1_strict_filter/interim/train_interactions.parquet
+      --current data/versions/v1_strict_filter/interim/train_interactions.parquet
+      --vocab data/versions/v1_strict_filter/processed/item_vocab.json --inject-oov-rate
+      0.30 --output metrics/monitoring/drift_synthetic_oov.json --html reports/monitoring/evidently_synthetic_oov.html\n"
+    deps:
+    - path: data/versions/v1_strict_filter/interim/train_interactions.parquet
+      hash: md5
+      md5: 780276ea1f26901a4d66bd0ffeb7ecd3
+      size: 6715137
+    - path: data/versions/v1_strict_filter/processed/item_vocab.json
+      hash: md5
+      md5: 0541b8d488b341e01af36dfb4fcc6e9e
+      size: 903680
+    - path: src/recsys/monitoring/drift.py
+      hash: md5
+      md5: 8ecaa962f1b03dae1c5a49b92751cdea
+      size: 13764
+    - path: src/recsys/monitoring/evidently_report.py
+      hash: md5
+      md5: 4e24cc733f9420fd606374bd7da2dfb8
+      size: 1942
+    - path: src/recsys/monitoring/features.py
+      hash: md5
+      md5: 90a7ceec28fdc011bda0d61956278e97
+      size: 8797
+    outs:
+    - path: metrics/monitoring/drift_synthetic_oov.json
+      hash: md5
+      md5: 18d801f1d773c95cb56cbf49e56aaa1c
+      size: 1406
+    - path: reports/monitoring/evidently_synthetic_oov.html
+      hash: md5
+      md5: 3a53e28e5bd83f705a9756cb28c500c5
+      size: 4177101

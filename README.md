@@ -6,16 +6,6 @@ Session-based recommendation system scaffold aligned to an SR-GNN style workflow
 
 The repository is structured for a session-based recommender. The production-facing model wrapper is `SRGNNRecommender`, with a transition-graph baseline behind the same interfaces so the repository stays usable before a full neural SR-GNN implementation is dropped in.
 
-## Team Members
-
-| Name | Student ID | Role |
-| :--- | :--- | :--- |
-| Tran Anh Tuan | 11230599 | AI Engineer |
-| Ly Thanh Long | 11230561 | DevOps Engineer |
-| Duong Thi Huyen Trang | 11230541 | ML Engineer |
-| Dang Ngoc Hoa | 11230534 | Data Scientist |
-| Doan Quoc Bao | 11230519 | Data Analyst |
-
 ## Technology Stack
 
 ### Backend (Python 3.10+)
