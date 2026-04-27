@@ -38,11 +38,11 @@ spec:
             - name: RECSYS_MODEL_CACHE_ROOT
               value: /app/models/cache
             - name: RECSYS_DEPLOY_MODEL_NAME
-              value: __RECSYS_DEPLOY_MODEL_NAME__
+              value: "__RECSYS_DEPLOY_MODEL_NAME__"
             - name: RECSYS_DEPLOY_MODEL_VERSION
-              value: __RECSYS_DEPLOY_MODEL_VERSION__
+              value: "__RECSYS_DEPLOY_MODEL_VERSION__"
             - name: RECSYS_DEPLOY_RUN_ID
-              value: __RECSYS_DEPLOY_RUN_ID__
+              value: "__RECSYS_DEPLOY_RUN_ID__"
             - name: DAGSHUB_USER_TOKEN
               valueFrom:
                 secretKeyRef:
