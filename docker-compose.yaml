@@ -8,6 +8,7 @@ services:
       - .env
     environment:
       RECSYS_SERVING_CONFIG: /app/configs/serving_config.yaml
+      RECSYS_MODEL_CACHE_ROOT: /app/models/cache
       RECSYS_MODEL_PATH: /app/models/trained/latest/
       RECSYS_API_KEYS: ${RECSYS_API_KEYS:?Set RECSYS_API_KEYS in .env}
       DAGSHUB_USER_TOKEN: ${DAGSHUB_USER_TOKEN:-}
@@ -16,6 +17,7 @@ services:
     volumes:
       - ./configs:/app/configs:ro
       - ./models:/app/models:ro
+      - model_cache:/app/models/cache
     healthcheck:
       test:
         [
@@ -112,3 +114,4 @@ volumes:
   mlflow_data:
   prometheus_data:
   grafana_data:
+  model_cache:

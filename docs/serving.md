@@ -26,7 +26,7 @@ Key settings:
 - `model_registry.local_cache_dir`: Optional persistent cache directory for downloaded registry artifacts.
 - `model_registry.fallback_to_filesystem`: Defaults to `false` for registry-only serving.
 - `model_path`: Optional legacy fallback path used only if filesystem fallback is explicitly enabled.
-- `cors.allowed_origins`: Browser origins allowed to call the API. Defaults to `http://0.0.0.0:5173`.
+- `cors.allowed_origins`: Browser origins allowed to call the API. Defaults include `http://0.0.0.0:5173`, `http://localhost:5173`, and `http://127.0.0.1:5173` for local Vite development.
 - `security.enabled`: Require API-key auth for protected endpoints.
 - `security.api_keys_env_var`: Environment variable containing comma-separated API keys.
 - `security.public_paths`: Paths that stay public. Default: `/health` and `/ready`.
@@ -66,6 +66,7 @@ To run the server locally, you can use the provided CLI entrypoint or Docker Com
 ```bash
 # Using Python
 export RECSYS_API_KEYS=<your-api-key>
+export RECSYS_MODEL_CACHE_ROOT=models/cache
 python -m recsys.serving.api --config configs/serving_config.yaml
 
 # Serve an explicit versioned artifact
@@ -79,6 +80,11 @@ export GRAFANA_ADMIN_PASSWORD=<strong-password>
 printf '%s' "$RECSYS_API_KEYS" > deployment/secrets/recsys-api-key
 docker compose up api
 ```
+
+For local Python runs, `RECSYS_MODEL_CACHE_ROOT` must point to a writable path.
+The deployment config keeps `/app/models/cache` as the container path; Kubernetes
+mounts the shared model-cache PVC there, and Docker Compose mounts a local named
+volume at the same path.
 
 Send protected requests with:
 

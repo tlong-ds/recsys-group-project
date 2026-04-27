@@ -134,6 +134,8 @@ def test_ready_is_public(monkeypatch) -> None:
 def test_cors_uses_configured_allowed_origins(monkeypatch) -> None:
     allowed_origins = [
         "http://0.0.0.0:5173",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
         "https://recsys-group-project.lytlong-pers.workers.dev/",
     ]
     app = _app(

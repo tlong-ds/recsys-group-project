@@ -13,6 +13,7 @@ from recsys.serving.predictor import Predictor
 from recsys.utils.config import load_config
 
 DEFAULT_CONFIG_PATH = Path("configs/serving_config.yaml")
+LOCAL_MODEL_CACHE_DIR = "models/cache"
 
 RECSYS_MODEL_READY = Gauge(
     "recsys_model_ready",
@@ -63,11 +64,7 @@ class ModelProvider:
             )
             run_id = deploy_overrides.get("run_id")
             artifact_path = str(registry_cfg.get("artifact_path", "registered_model"))
-            cache_dir = (
-                os.getenv("RECSYS_MODEL_CACHE_ROOT")
-                or deploy_overrides.get("cache_root")
-                or registry_cfg.get("local_cache_dir")
-            )
+            cache_dir = resolve_model_cache_dir(registry_cfg, deploy_overrides)
             overrides = deploy_overrides
             has_pins = bool(
                 overrides.get("model_name")
@@ -171,6 +168,33 @@ def _deploy_registry_overrides() -> dict[str, str]:
         "run_id": os.getenv("RECSYS_DEPLOY_RUN_ID", "").strip(),
         "cache_root": os.getenv("RECSYS_MODEL_CACHE_ROOT", "").strip(),
     }
+
+
+def resolve_model_cache_dir(
+    registry_config: dict[str, Any],
+    deploy_overrides: dict[str, str] | None = None,
+) -> str | None:
+    """Resolve the registry cache path for host-local and container runtimes."""
+    env_cache_root = os.getenv("RECSYS_MODEL_CACHE_ROOT", "").strip()
+    if env_cache_root:
+        return env_cache_root
+
+    override_cache_root = (deploy_overrides or {}).get("cache_root", "").strip()
+    if override_cache_root:
+        return override_cache_root
+
+    configured_cache_root = str(registry_config.get("local_cache_dir", "")).strip()
+    if configured_cache_root.startswith("/app/") and not _running_in_container():
+        return LOCAL_MODEL_CACHE_DIR
+    return configured_cache_root or None
+
+
+def _running_in_container() -> bool:
+    return (
+        Path("/.dockerenv").exists()
+        or bool(os.getenv("KUBERNETES_SERVICE_HOST", "").strip())
+        or bool(os.getenv("container", "").strip())
+    )
 
 
 def _resolve_model_path(

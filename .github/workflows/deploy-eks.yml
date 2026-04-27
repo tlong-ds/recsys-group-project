@@ -238,12 +238,13 @@ jobs:
         run: |
           # Get Ingress hostname
           log() { echo "[smoke-gate] $*"; }
+          die() { echo "[smoke-gate] $*" 1>&2; exit 1; }
           
           log "Resolving ingress hostname (mandatory for production gate)..."
           # Retry for up to 5 minutes (30 * 10s) as ALBs can take time to provision/update
           INGRESS_HOST=""
           for i in {1..30}; do
-            INGRESS_HOST=$(kubectl -n recsys get ingress recsys-api -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "")
+            INGRESS_HOST=$(kubectl -n recsys get ingress recsys-public -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "")
             if [[ -n "$INGRESS_HOST" ]]; then 
               log "  Successfully resolved ingress: $INGRESS_HOST"
               break

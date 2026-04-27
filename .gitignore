@@ -216,6 +216,7 @@ __main__
 mlflow_fresh.db
 
 # DVC-generated training artifacts (local workspace only)
+models/cache/
 models/experiments/
 metrics/experiments/
 models/trained/*/latest/

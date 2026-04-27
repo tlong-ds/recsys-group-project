@@ -357,6 +357,54 @@ def test_deploy_pin_env_overrides_alias_selection(monkeypatch) -> None:
     assert captured["cache_dir"] == "/app/models/cache"
 
 
+def test_host_local_registry_cache_uses_repo_cache_for_app_path(monkeypatch) -> None:
+    captured: dict[str, str | None] = {}
+
+    catalog_repo_module = importlib.import_module("recsys.serving.catalog_repository")
+    monkeypatch.setattr(
+        catalog_repo_module.asyncpg,
+        "create_pool",
+        lambda *a, **kw: _make_async_pool(),
+    )
+
+    model_provider_module = importlib.import_module("recsys.serving.model_provider")
+    monkeypatch.setattr(model_provider_module, "_running_in_container", lambda: False)
+    monkeypatch.delenv("RECSYS_MODEL_CACHE_ROOT", raising=False)
+
+    def _from_registry(**kwargs):
+        captured.update(kwargs)
+        return _FakePredictor(), {
+            "source": "mlflow_registry",
+            "model_name": "recsys-serving",
+            "model_version": "1",
+            "run_id": "run-1",
+        }
+
+    monkeypatch.setattr(Predictor, "from_model_registry", staticmethod(_from_registry))
+
+    api_module = importlib.import_module("recsys.serving.api")
+    app = api_module.create_app(
+        serving_config={
+            **_serving_config(),
+            "preload_model_on_startup": True,
+            "model_registry": {
+                "enabled": True,
+                "model_name": "recsys-serving",
+                "model_alias": "Production",
+                "artifact_path": "registered_model",
+                "local_cache_dir": "/app/models/cache",
+                "fallback_to_filesystem": False,
+            },
+        },
+        mlflow_config={},
+    )
+
+    with TestClient(app) as client:
+        assert client.get("/health").status_code == 200
+
+    assert captured["cache_dir"] == "models/cache"
+
+
 def test_from_path_dispatches_tagnn_loader(monkeypatch, tmp_path: Path) -> None:
     artifact_dir = tmp_path / "artifact_tagnn"
     artifact_dir.mkdir(parents=True)

@@ -40,6 +40,8 @@ DEFAULT_CONFIG_PATH = Path("configs/serving_config.yaml")
 CONFIG_ENV_VAR = "RECSYS_SERVING_CONFIG"
 DEFAULT_CORS_ALLOWED_ORIGINS = (
     "http://0.0.0.0:5173",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
 )
 
 

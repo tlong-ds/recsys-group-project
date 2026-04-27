@@ -10,6 +10,7 @@ from typing import Any
 from loguru import logger
 from mlflow.tracking import MlflowClient
 
+from recsys.serving.model_provider import resolve_model_cache_dir
 from recsys.serving.predictor import (
     Predictor,
     _looks_like_model_artifact,
@@ -70,11 +71,7 @@ def run_warmup(config_path: Path) -> dict[str, str]:
     )
 
     artifact_path = str(registry_cfg.get("artifact_path", "registered_model"))
-    cache_root = str(
-        os.getenv("RECSYS_MODEL_CACHE_ROOT")
-        or registry_cfg.get("local_cache_dir")
-        or "/app/models/cache"
-    )
+    cache_root = resolve_model_cache_dir(registry_cfg) or "/app/models/cache"
 
     cache_target = resolve_registry_cache_path(
         cache_root=cache_root,

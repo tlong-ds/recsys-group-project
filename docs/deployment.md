@@ -23,6 +23,12 @@ The default serving config is registry-first and expects a promoted canonical
 model in MLflow (`recsys-serving`). Filesystem model paths are only a legacy
 fallback option and are disabled by default.
 
+Local Python runs should keep `RECSYS_MODEL_CACHE_ROOT=models/cache` from
+`.env.example` so registry artifacts are downloaded to a writable repo-local
+cache. Docker Compose overrides that variable to `/app/models/cache` and mounts
+a named volume there, matching the Kubernetes deployment path without writing to
+the read-only `./models:/app/models:ro` bind mount.
+
 To enable local observability:
 ```bash
 # set GRAFANA_ADMIN_PASSWORD in .env
