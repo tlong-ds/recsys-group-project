@@ -38,7 +38,7 @@ raw interactions
 Key artifacts:
 - `configs/data_config.yaml`: default data pipeline configuration
 - `configs/data_versions/*.yaml`: versioned data experiment overlays
-- `dvc.yaml`: reproducible data, training, evaluation, and drift stages
+- `pipelines/*/dvc.yaml`: reproducible data, training, evaluation, and drift stages
 - `data/versions/*/processed/data_stats.json`: post-filter split statistics
 - `docs/data_contract.md`: schema, quality, lineage, and rollback contract
 
@@ -130,7 +130,7 @@ Security and robustness controls:
 
 Reproducibility mechanisms:
 - source-controlled configs under `configs/`
-- DVC-tracked data/model stages in `dvc.yaml` and `dvc.lock`
+- DVC-tracked data/model stages in `pipelines/*/dvc.yaml` and `pipelines/*/dvc.lock`
 - version-specific artifact directories
 - deterministic seed in training config
 - model/data contracts under `docs/`

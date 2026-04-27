@@ -57,14 +57,14 @@ recsys-process-data --stage all --config configs/data_config.yaml --params param
 recsys-train --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params params.yaml
 recsys-serve --config configs/serving_config.yaml
 # Closed-loop: build data versions + train/eval + compare in one target
-dvc repro compare_data_versions
+dvc repro pipelines/monitoring/dvc.yaml:compare_data_versions
 # Data-only builds (no training)
-dvc repro data_version_v1
-dvc repro data_version_v2
+dvc repro pipelines/data/dvc.yaml:data_version_v1
+dvc repro pipelines/data/dvc.yaml:data_version_v2
 # Full matrix: 3 data versions × 8 model profiles (24 train + 24 evaluate stages)
-dvc repro train_matrix evaluate_matrix
+dvc repro pipelines/training/dvc.yaml:train_matrix pipelines/training/dvc.yaml:evaluate_matrix
 # Select winner, retrain winner profile on train+val, then promote
-dvc repro select_best_model retrain_selected_model promote_retrained_model
+dvc repro pipelines/training/dvc.yaml:select_best_model pipelines/training/dvc.yaml:retrain_selected_model pipelines/training/dvc.yaml:promote_retrained_model
 ```
 
 ## Versioned data pipelines (V1/V2)
@@ -76,15 +76,15 @@ pipeline.
 
 ```bash
 # Run the full version comparison pipeline
-dvc repro compare_data_versions
+dvc repro pipelines/monitoring/dvc.yaml:compare_data_versions
 
 # Build data versions independently (no training)
-dvc repro data_version_v1
-dvc repro data_version_v2
+dvc repro pipelines/data/dvc.yaml:data_version_v1
+dvc repro pipelines/data/dvc.yaml:data_version_v2
 
 # Or run one version branch explicitly
-dvc repro eval_v1
-dvc repro eval_v2
+dvc repro pipelines/training/dvc.yaml:eval_v1
+dvc repro pipelines/training/dvc.yaml:eval_v2
 ```
 
 Version definitions:
@@ -126,20 +126,20 @@ Data versions are defined in `configs/data_versions/*.yaml`:
 Run fast profiles (default iteration loop):
 
 ```bash
-dvc repro train_matrix evaluate_matrix
+dvc repro pipelines/training/dvc.yaml:train_matrix pipelines/training/dvc.yaml:evaluate_matrix
 ```
 
 Run long-running profiles (`srgnn_ngc`, `tagnn`):
 
 ```bash
-dvc repro train_matrix_slow evaluate_matrix_slow
+dvc repro pipelines/training/dvc.yaml:train_matrix_slow pipelines/training/dvc.yaml:evaluate_matrix_slow
 ```
 
 Run one specific job (fast or slow):
 
 ```bash
-dvc repro train_matrix@v2_sliding_window-tagnn evaluate_matrix@v2_sliding_window-tagnn
-dvc repro train_matrix_slow@v2_sliding_window-tagnn evaluate_matrix_slow@v2_sliding_window-tagnn
+dvc repro pipelines/training/dvc.yaml:train_matrix@v2_sliding_window-tagnn pipelines/training/dvc.yaml:evaluate_matrix@v2_sliding_window-tagnn
+dvc repro pipelines/training/dvc.yaml:train_matrix_slow@v2_sliding_window-tagnn pipelines/training/dvc.yaml:evaluate_matrix_slow@v2_sliding_window-tagnn
 ```
 
 Artifacts and metrics are separated per job:
@@ -151,7 +151,7 @@ Artifacts and metrics are separated per job:
 Final production flow retrains the selected winner on merged train+val data:
 
 ```bash
-dvc repro select_best_model retrain_selected_model promote_retrained_model
+dvc repro pipelines/training/dvc.yaml:select_best_model pipelines/training/dvc.yaml:retrain_selected_model pipelines/training/dvc.yaml:promote_retrained_model
 ```
 
 This retrain uses `metrics/best_model.json` to resolve both `data_version` and
@@ -159,6 +159,13 @@ This retrain uses `metrics/best_model.json` to resolve both `data_version` and
 promotes from `metrics/retrained_selected/training_metrics.json`.
 
 ## Artifact commit hygiene and DVC push checks
+
+If you are migrating from the legacy monolithic `dvc.lock`, split the lock
+state first without recomputing artifacts:
+
+```bash
+python scripts/split_dvc_lock.py
+```
 
 Training outputs are intentionally split into:
 
@@ -171,7 +178,7 @@ Before committing:
 git status --short
 ```
 
-Expected: source/config/lock changes only (`dvc.yaml`, `dvc.lock`, code/config/docs).
+Expected: source/config/lock changes only (`pipelines/*/dvc.yaml`, `pipelines/*/dvc.lock`, code/config/docs).
 
 After training and before `dvc push`, confirm whether there are new cache objects:
 
@@ -186,15 +193,15 @@ dvc push
 ```
 
 If push reports `Everything is up to date`, that means the remote already has the
-object hashes referenced by your current `dvc.lock` (or `dvc.lock` did not change
+object hashes referenced by your current split `dvc.lock` files (or those lockfiles did not change
 for those stage outputs).
 
 If you see warnings like `Output ... is missing version info. Cache for it will not be collected`,
-run reproduce for the relevant train stage(s) first so `dvc.lock` gets output hashes:
+run reproduce for the relevant train stage(s) first so the corresponding split `dvc.lock` gets output hashes:
 
 ```bash
-dvc repro train_matrix@v1_strict_filter-srgnn
-git diff -- dvc.lock
+dvc repro pipelines/training/dvc.yaml:train_matrix@v1_strict_filter-srgnn
+git diff -- pipelines/training/dvc.lock
 dvc status -c
 dvc push
 ```

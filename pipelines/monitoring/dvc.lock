@@ -1,0 +1,43 @@
+schema: '2.0'
+stages:
+  drift_v1_vs_v2:
+    cmd: 'python -m recsys.monitoring.drift --reference data/versions/v1_strict_filter/interim/train_interactions.parquet
+      --current data/versions/v2_sliding_window/interim/test_interactions.parquet
+      --vocab data/versions/v1_strict_filter/processed/item_vocab.json --output metrics/monitoring/drift_v1_vs_v2.json
+      --html reports/monitoring/evidently_v1_vs_v2.html
+
+      '
+    deps:
+    - path: data/versions/v1_strict_filter/interim/train_interactions.parquet
+      hash: md5
+      md5: 780276ea1f26901a4d66bd0ffeb7ecd3
+      size: 6715137
+    - path: data/versions/v1_strict_filter/processed/item_vocab.json
+      hash: md5
+      md5: 0541b8d488b341e01af36dfb4fcc6e9e
+      size: 903680
+    - path: data/versions/v2_sliding_window/interim/test_interactions.parquet
+      hash: md5
+      md5: 2ee76cc5876801947e0e9df66d0058d2
+      size: 941425
+    - path: src/recsys/monitoring/drift.py
+      hash: md5
+      md5: 8ecaa962f1b03dae1c5a49b92751cdea
+      size: 13764
+    - path: src/recsys/monitoring/evidently_report.py
+      hash: md5
+      md5: 4e24cc733f9420fd606374bd7da2dfb8
+      size: 1942
+    - path: src/recsys/monitoring/features.py
+      hash: md5
+      md5: 90a7ceec28fdc011bda0d61956278e97
+      size: 8797
+    outs:
+    - path: metrics/monitoring/drift_v1_vs_v2.json
+      hash: md5
+      md5: d24ec76a0201037c9a5a92ed6c8d19f0
+      size: 1534
+    - path: reports/monitoring/evidently_v1_vs_v2.html
+      hash: md5
+      md5: b3dde5831b5d732846ac9a7fbffc0fbc
+      size: 298

@@ -124,13 +124,13 @@ pip install -e .[monitoring]
 
 The same scenarios are available as DVC stages:
 ```bash
-dvc repro drift_baseline
-dvc repro drift_v1_vs_v2
-dvc repro drift_synthetic_oov
+dvc repro pipelines/monitoring/dvc.yaml:drift_baseline
+dvc repro pipelines/monitoring/dvc.yaml:drift_v1_vs_v2
+dvc repro pipelines/monitoring/dvc.yaml:drift_synthetic_oov
 ```
 
 They are also integrated into the closed-loop `compare_data_versions` target, so
-`dvc repro compare_data_versions` now generates both the version comparison and
+`dvc repro pipelines/monitoring/dvc.yaml:compare_data_versions` now generates both the version comparison and
 drift summaries in one run.
 
 ## Running the Monitoring Stack

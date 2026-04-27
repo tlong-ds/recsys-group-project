@@ -1,0 +1,62 @@
+{
+  "reference": {
+    "path": "data/versions/v1_strict_filter/interim/train_interactions.parquet",
+    "rows": 618718,
+    "sessions": 110030,
+    "unique_items": 23072
+  },
+  "current": {
+    "path": "data/versions/v2_sliding_window/interim/test_interactions.parquet",
+    "rows": 76249,
+    "sessions": 15970,
+    "unique_items": 21010
+  },
+  "status": "critical",
+  "summary": {
+    "total_checks": 7,
+    "ok_checks": 2,
+    "warning_checks": 2,
+    "critical_checks": 3,
+    "oov_ratio": 0.13892641214966753,
+    "top_100_item_overlap": 0.21,
+    "item_js_divergence": 0.21392936679880953
+  },
+  "checks": {
+    "session_length": {
+      "method": "psi",
+      "score": 0.15604763514925638,
+      "status": "warning"
+    },
+    "unique_items": {
+      "method": "psi",
+      "score": 0.321309272767165,
+      "status": "critical"
+    },
+    "repeat_ratio": {
+      "method": "psi",
+      "score": 0.05637888489741115,
+      "status": "ok"
+    },
+    "duration_seconds": {
+      "method": "psi",
+      "score": 0.0,
+      "status": "ok"
+    },
+    "oov_ratio": {
+      "method": "reference_vocab_coverage",
+      "score": 0.13892641214966753,
+      "status": "warning"
+    },
+    "item_popularity": {
+      "method": "js_divergence",
+      "score": 0.21392936679880953,
+      "status": "critical"
+    },
+    "top_100_item_overlap": {
+      "method": "top_n_overlap",
+      "score": 0.21,
+      "status": "critical"
+    }
+  },
+  "evidently_html_error": "Evidently is not installed. Install it with: pip install -e .[monitoring]"
+}
