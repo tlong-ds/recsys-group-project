@@ -1,0 +1,40 @@
+serving:
+  host: 0.0.0.0
+  port: 8000
+  reload: false
+  preload_model_on_startup: true
+  model_path: /app/models/trained/v1_strict_filter/latest
+  default_top_k: 10
+  cors:
+    allowed_origins:
+      - http://0.0.0.0:5173
+      - http://localhost:5173
+      - http://127.0.0.1:5173
+      - https://recsys-group-project.lytlong-pers.workers.dev/
+  security:
+    enabled: true
+    api_keys_env_var: RECSYS_API_KEYS
+    public_paths:
+      - /health
+      - /ready
+    rate_limit_per_minute: 120
+    max_body_bytes: 65536
+    docs_enabled: false
+  model_registry:
+    enabled: false
+    model_name: recsys-serving
+    model_alias: Production
+    model_version: ""
+    artifact_path: registered_model
+    local_cache_dir: /app/models/cache
+    fallback_to_filesystem: false
+
+mlflow:
+  enabled: false
+  tracking_uri: ""
+  experiment_name: recsys_srgnn
+  dagshub:
+    enabled: false
+    token_env_var: DAGSHUB_USER_TOKEN
+    repo_owner: lytlong.pers
+    repo_name: recsys-group-project

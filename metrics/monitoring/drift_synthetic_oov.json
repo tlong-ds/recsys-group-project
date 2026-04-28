@@ -1,0 +1,61 @@
+{
+  "reference": {
+    "path": "data/versions/v1_strict_filter/interim/train_interactions.parquet",
+    "rows": 618718,
+    "sessions": 110030,
+    "unique_items": 23072
+  },
+  "current": {
+    "path": "data/versions/v1_strict_filter/interim/train_interactions.parquet",
+    "rows": 618718,
+    "sessions": 110030,
+    "unique_items": 208661
+  },
+  "status": "critical",
+  "summary": {
+    "total_checks": 7,
+    "ok_checks": 4,
+    "warning_checks": 2,
+    "critical_checks": 1,
+    "oov_ratio": 0.2999993535019185,
+    "top_100_item_overlap": 0.96,
+    "item_js_divergence": 0.11904014258575094
+  },
+  "checks": {
+    "session_length": {
+      "method": "psi",
+      "score": 0.0,
+      "status": "ok"
+    },
+    "unique_items": {
+      "method": "psi",
+      "score": 0.06768733590927331,
+      "status": "ok"
+    },
+    "repeat_ratio": {
+      "method": "psi",
+      "score": 0.19808860174422838,
+      "status": "warning"
+    },
+    "duration_seconds": {
+      "method": "psi",
+      "score": 0.0,
+      "status": "ok"
+    },
+    "oov_ratio": {
+      "method": "reference_vocab_coverage",
+      "score": 0.2999993535019185,
+      "status": "critical"
+    },
+    "item_popularity": {
+      "method": "js_divergence",
+      "score": 0.11904014258575094,
+      "status": "warning"
+    },
+    "top_100_item_overlap": {
+      "method": "top_n_overlap",
+      "score": 0.96,
+      "status": "ok"
+    }
+  }
+}

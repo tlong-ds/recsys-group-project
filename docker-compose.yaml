@@ -3,20 +3,19 @@ name: recsys-local
 services:
   api:
     build: .
-    command: ["recsys-serve", "--config", "configs/serving_config.yaml"]
+    command: ["recsys-serve", "--config", "configs/serving_compose.yaml"]
     env_file:
       - .env
     environment:
-      RECSYS_SERVING_CONFIG: /app/configs/serving_config.yaml
+      RECSYS_SERVING_CONFIG: /app/configs/serving_compose.yaml
       RECSYS_MODEL_CACHE_ROOT: /app/models/cache
-      RECSYS_MODEL_PATH: /app/models/trained/latest/
+      RECSYS_MODEL_PATH: /app/models/trained/v1_strict_filter/latest
       RECSYS_API_KEYS: ${RECSYS_API_KEYS:?Set RECSYS_API_KEYS in .env}
-      DAGSHUB_USER_TOKEN: ${DAGSHUB_USER_TOKEN:-}
     ports:
       - "8000:8000"
     volumes:
       - ./configs:/app/configs:ro
-      - ./models:/app/models:ro
+      - ./models/trained/v1_strict_filter/latest:/app/models/trained/v1_strict_filter/latest:ro
       - model_cache:/app/models/cache
     healthcheck:
       test:
@@ -43,6 +42,7 @@ services:
       - "5173:5173"
     volumes:
       - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
     depends_on:
       api:
         condition: service_healthy
@@ -84,10 +84,22 @@ services:
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=6h"
+      - "--storage.tsdb.retention.size=256MB"
       - "--web.enable-lifecycle"
     depends_on:
       api:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O- http://127.0.0.1:9090/-/healthy >/dev/null 2>&1 || exit 1",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
     networks: [recsys]
 
@@ -98,11 +110,23 @@ services:
       - "127.0.0.1:3000:3000"
     volumes:
       - ./deployment/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deployment/monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
     depends_on:
-      - prometheus
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O- http://127.0.0.1:3000/api/health >/dev/null 2>&1 || exit 1",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
     networks: [recsys]
 
@@ -115,3 +139,4 @@ volumes:
   prometheus_data:
   grafana_data:
   model_cache:
+  frontend_node_modules:

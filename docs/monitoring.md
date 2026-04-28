@@ -142,6 +142,11 @@ printf '%s' "$RECSYS_API_KEYS" > deployment/secrets/recsys-api-key
 docker compose --profile observability up -d prometheus grafana
 ```
 
+Grafana is provisioned with the `RecSys API` dashboard under the `RecSys`
+folder. If the dashboard only shows scrape/process metrics, send traffic to
+`POST /recommend`; the application-specific recommendation and latency metrics
+are emitted only after the endpoint has handled requests.
+
 ## Monitoring on EKS
 
 EKS manifests for Prometheus and Grafana are included under `deployment/kubernetes/`

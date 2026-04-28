@@ -1,0 +1,137 @@
+<mxfile host="65bd71144e">
+    <diagram id="UlIT2j4oK6sDbEjdHyAO" name="Page-1">
+        <mxGraphModel dx="412" dy="311" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="client_public" value="Public Client" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="80" width="30" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="client_auth" value="Auth Client" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="240" width="30" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="ingress" value="K8s Ingress / ALB&lt;br&gt;(TLS Termination)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="160" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="fastapi_app" value="FastAPI Serving Application" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="280" y="40" width="600" height="520" as="geometry"/>
+                </mxCell>
+                <mxCell id="security_layer" value="Security Middleware" style="swimlane;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="fastapi_app" vertex="1">
+                    <mxGeometry x="20" y="40" width="240" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="cors" value="CORS Check" style="rounded=1;whiteSpace=wrap;html=1;" parent="security_layer" vertex="1">
+                    <mxGeometry x="10" y="40" width="100" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="api_key" value="API Key Auth&lt;br&gt;(Bearer Token)" style="rounded=1;whiteSpace=wrap;html=1;" parent="security_layer" vertex="1">
+                    <mxGeometry x="120" y="40" width="110" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="rate_limit" value="Rate Limiter" style="rounded=1;whiteSpace=wrap;html=1;" parent="security_layer" vertex="1">
+                    <mxGeometry x="10" y="100" width="100" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="body_size" value="Size Limit" style="rounded=1;whiteSpace=wrap;html=1;" parent="security_layer" vertex="1">
+                    <mxGeometry x="120" y="100" width="100" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="endpoints" value="Endpoints" style="swimlane;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" parent="fastapi_app" vertex="1">
+                    <mxGeometry x="300" y="40" width="280" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="ep_health" value="/health" style="rounded=1;whiteSpace=wrap;html=1;" parent="endpoints" vertex="1">
+                    <mxGeometry x="10" y="40" width="80" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ep_ready" value="/ready" style="rounded=1;whiteSpace=wrap;html=1;" parent="endpoints" vertex="1">
+                    <mxGeometry x="100" y="40" width="80" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ep_recommend" value="/recommend" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1" parent="endpoints" vertex="1">
+                    <mxGeometry x="190" y="40" width="80" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ep_metrics" value="/metrics" style="rounded=1;whiteSpace=wrap;html=1;" parent="endpoints" vertex="1">
+                    <mxGeometry x="190" y="90" width="80" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ep_others" value="/products, /views..." style="rounded=1;whiteSpace=wrap;html=1;" parent="endpoints" vertex="1">
+                    <mxGeometry x="10" y="90" width="170" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="validation" value="Schema Validation (Pydantic)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" parent="fastapi_app" vertex="1">
+                    <mxGeometry x="20" y="220" width="560" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="predictor" value="Predictor Logic&lt;br&gt;(predictor.py)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1" parent="fastapi_app" vertex="1">
+                    <mxGeometry x="200" y="280" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="loaders" value="Model Loaders" style="swimlane;whiteSpace=wrap;html=1;" parent="fastapi_app" vertex="1">
+                    <mxGeometry x="20" y="360" width="560" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="srgnn" value="SRGNN Loader" style="rounded=0;whiteSpace=wrap;html=1;" parent="loaders" vertex="1">
+                    <mxGeometry x="20" y="50" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="tagnn" value="TAGNN Loader" style="rounded=0;whiteSpace=wrap;html=1;" parent="loaders" vertex="1">
+                    <mxGeometry x="160" y="50" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ggnn" value="GGNN Loader" style="rounded=0;whiteSpace=wrap;html=1;" parent="loaders" vertex="1">
+                    <mxGeometry x="300" y="50" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="metadata" value="model.json&lt;br&gt;Metadata Resolver" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="loaders" vertex="1">
+                    <mxGeometry x="440" y="40" width="100" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="mlflow" value="MLflow Model Registry&lt;br&gt;(Registry-First Source)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#f8cecc;strokeColor=#b85450;" parent="1" vertex="1">
+                    <mxGeometry x="950" y="280" width="120" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="cache" value="Local Cache (PVC)&lt;br&gt;/app/models/cache" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="950" y="440" width="120" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="prometheus" value="Prometheus&lt;br&gt;(Metrics Scraper)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" parent="1" vertex="1">
+                    <mxGeometry x="950" y="80" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" parent="1" source="client_public" target="ingress" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" parent="1" source="client_auth" target="ingress" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="ingress" target="security_layer" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="260" y="190"/>
+                            <mxPoint x="260" y="160"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="edge4" value="Authenticated &lt;br&gt;&amp;amp; Verified" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="security_layer" target="endpoints" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="endpoints" target="validation" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="580" y="240"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="edge6" value="Valid Schema" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="validation" target="predictor" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge7" value="Dispatch" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="predictor" target="loaders" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge8" value="Resolve &amp; Download" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="predictor" target="mlflow" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge9" value="Persistent Storage" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="mlflow" target="cache" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge10" value="Fast Loading" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=1;entryY=0.75;entryDx=0;entryDy=0;" parent="1" source="cache" target="loaders" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="900" y="490"/>
+                            <mxPoint x="900" y="505"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="edge11" value="Scrape /metrics" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="prometheus" target="ep_metrics" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="2" style="edgeStyle=none;html=1;" edge="1" parent="1" source="endpoints">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="580" y="130" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

@@ -32,6 +32,14 @@ spec:
               mountPath: /etc/grafana/provisioning/datasources/prometheus.yml
               subPath: prometheus.yml
               readOnly: true
+            - name: dashboards
+              mountPath: /etc/grafana/provisioning/dashboards/recsys.yml
+              subPath: recsys.yml
+              readOnly: true
+            - name: dashboards
+              mountPath: /etc/grafana/dashboards/recsys-api.json
+              subPath: recsys-api.json
+              readOnly: true
           resources:
             requests:
               cpu: 100m
@@ -55,4 +63,6 @@ spec:
         - name: datasource
           configMap:
             name: grafana-datasources
-
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards

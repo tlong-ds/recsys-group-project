@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: recsys-api
+    bearer_token_file: ./deployment/secrets/recsys-api-key
+    static_configs:
+      - targets: ["localhost:8000"]
