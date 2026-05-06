@@ -1,0 +1,508 @@
+schema: '2.0'
+stages:
+  ingest:
+    cmd: python -m recsys.data.pipeline --stage ingest --config configs/data_config.yaml
+      --params params.yaml
+    deps:
+    - path: configs/data_config.yaml
+      hash: md5
+      md5: aa2c47508d9d68f2af73a54870c01b28
+      size: 2408
+    - path: data/raw/train-item-views.csv
+      hash: md5
+      md5: cd4fadae46ed46233a2ea53c2c1c605d
+      size: 43899457
+    - path: src/recsys/data/ingest.py
+      hash: md5
+      md5: 08e978aff0d4b8c0401d3709a6010f49
+      size: 4031
+    - path: src/recsys/data/pipeline.py
+      hash: md5
+      md5: 9913315f476b54e564d35442cb51f0bb
+      size: 2538
+    - path: src/recsys/data/stages.py
+      hash: md5
+      md5: a31e7b6864397decb3744dbcc6da9646
+      size: 18456
+    - path: src/recsys/utils/config.py
+      hash: md5
+      md5: 8094783967868cb9c14117c556e9e25b
+      size: 5263
+    outs:
+    - path: data/interim/interactions.parquet
+      hash: md5
+      md5: c8c6881941e80cb70fc1c58850ae9e3a
+      size: 14185439
+    - path: metrics/ingest_report.json
+      hash: md5
+      md5: 0efa6445f74aac35ba65ec45356592a1
+      size: 147
+  validate:
+    cmd: python -m recsys.data.pipeline --stage validate --config configs/data_config.yaml
+      --params params.yaml
+    deps:
+    - path: configs/data_config.yaml
+      hash: md5
+      md5: aa2c47508d9d68f2af73a54870c01b28
+      size: 2408
+    - path: data/interim/interactions.parquet
+      hash: md5
+      md5: c8c6881941e80cb70fc1c58850ae9e3a
+      size: 14185439
+    - path: src/recsys/data/pipeline.py
+      hash: md5
+      md5: 9913315f476b54e564d35442cb51f0bb
+      size: 2538
+    - path: src/recsys/data/stages.py
+      hash: md5
+      md5: a31e7b6864397decb3744dbcc6da9646
+      size: 18456
+    - path: src/recsys/data/validator.py
+      hash: md5
+      md5: af8acee3f1f156757f1a9675ffbb77eb
+      size: 7108
+    - path: src/recsys/utils/config.py
+      hash: md5
+      md5: 8094783967868cb9c14117c556e9e25b
+      size: 5263
+    params:
+      params.yaml:
+        data.validation.allow_duplicates: true
+        data.validation.max_session_length: 20
+        data.validation.min_session_length: 2
+    outs:
+    - path: data/validation_report.json
+      hash: md5
+      md5: 075c8de728e0f157536882e74758da4a
+      size: 1926
+  preprocess:
+    cmd: python -m recsys.data.pipeline --stage preprocess --config configs/data_config.yaml
+      --params params.yaml
+    deps:
+    - path: configs/data_config.yaml
+      hash: md5
+      md5: aa2c47508d9d68f2af73a54870c01b28
+      size: 2408
+    - path: data/interim/interactions.parquet
+      hash: md5
+      md5: c8c6881941e80cb70fc1c58850ae9e3a
+      size: 14185439
+    - path: src/recsys/data/pipeline.py
+      hash: md5
+      md5: 9913315f476b54e564d35442cb51f0bb
+      size: 2538
+    - path: src/recsys/data/preprocessor.py
+      hash: md5
+      md5: 051700dd03399a92edf684de7e496298
+      size: 10245
+    - path: src/recsys/data/stages.py
+      hash: md5
+      md5: a31e7b6864397decb3744dbcc6da9646
+      size: 18456
+    - path: src/recsys/utils/config.py
+      hash: md5
+      md5: 8094783967868cb9c14117c556e9e25b
+      size: 5263
+    params:
+      params.yaml:
+        data.parquet_compression: snappy
+        data.validation.allow_duplicates: true
+        data.validation.max_session_length: 20
+        data.validation.min_item_frequency: 5
+        data.validation.min_session_length: 2
+    outs:
+    - path: data/interim/clean_interactions.parquet
+      hash: md5
+      md5: 87160b19a46fd36b4c73e613ce4da046
+      size: 10569953
+  split:
+    cmd: python -m recsys.data.pipeline --stage split --config configs/data_config.yaml
+      --params params.yaml
+    deps:
+    - path: configs/data_config.yaml
+      hash: md5
+      md5: aa2c47508d9d68f2af73a54870c01b28
+      size: 2408
+    - path: data/interim/clean_interactions.parquet
+      hash: md5
+      md5: 87160b19a46fd36b4c73e613ce4da046
+      size: 10569953
+    - path: src/recsys/data/pipeline.py
+      hash: md5
+      md5: 9913315f476b54e564d35442cb51f0bb
+      size: 2538
+    - path: src/recsys/data/splitter.py
+      hash: md5
+      md5: 3522769c4298db9c27a14329b8c527ab
+      size: 8156
+    - path: src/recsys/data/stages.py
+      hash: md5
+      md5: a31e7b6864397decb3744dbcc6da9646
+      size: 18456
+    - path: src/recsys/utils/config.py
+      hash: md5
+      md5: 8094783967868cb9c14117c556e9e25b
+      size: 5263
+    params:
+      params.yaml:
+        data.parquet_compression: snappy
+        data.temporal_split.strategy: diginetica_legacy
+        data.temporal_split.test_days: 7
+        data.temporal_split.test_ratio: 0.15
+        data.temporal_split.val_days: 7
+        data.temporal_split.val_ratio: 0.15
+    outs:
+    - path: data/interim/test_interactions.parquet
+      hash: md5
+      md5: 2ee76cc5876801947e0e9df66d0058d2
+      size: 941425
+    - path: data/interim/train_interactions.parquet
+      hash: md5
+      md5: 912ad120b4cdf18e993744a0f58dbc63
+      size: 9245244
+    - path: data/interim/val_interactions.parquet
+      hash: md5
+      md5: 3b5a623ebb22d2864601ad5c3e3a413e
+      size: 695054
+  build_examples:
+    cmd: python -m recsys.data.pipeline --stage build_examples --config configs/data_config.yaml
+      --params params.yaml
+    deps:
+    - path: configs/data_config.yaml
+      hash: md5
+      md5: aa2c47508d9d68f2af73a54870c01b28
+      size: 2408
+    - path: data/interim/test_interactions.parquet
+      hash: md5
+      md5: 2ee76cc5876801947e0e9df66d0058d2
+      size: 941425
+    - path: data/interim/train_interactions.parquet
+      hash: md5
+      md5: 912ad120b4cdf18e993744a0f58dbc63
+      size: 9245244
+    - path: data/interim/val_interactions.parquet
+      hash: md5
+      md5: 3b5a623ebb22d2864601ad5c3e3a413e
+      size: 695054
+    - path: src/recsys/data/pipeline.py
+      hash: md5
+      md5: 9913315f476b54e564d35442cb51f0bb
+      size: 2538
+    - path: src/recsys/data/stages.py
+      hash: md5
+      md5: a31e7b6864397decb3744dbcc6da9646
+      size: 18456
+    - path: src/recsys/data/training_examples.py
+      hash: md5
+      md5: 9c437188e5acd2ce82208058bb50cd1a
+      size: 15517
+    - path: src/recsys/utils/config.py
+      hash: md5
+      md5: 8094783967868cb9c14117c556e9e25b
+      size: 5263
+    params:
+      params.yaml:
+        data.compatibility.example_order: reverse
+        data.compatibility.vocab_order: first_seen
+        data.parquet_compression: snappy
+        data.training_example_format: graph
+    outs:
+    - path: data/processed/data_stats.json
+      hash: md5
+      md5: fafd51d234da54685ca73e9b29fd9908
+      size: 1038
+    - path: data/processed/item_vocab.json
+      hash: md5
+      md5: 7f634e8d973254b029694d68c5917f5a
+      size: 1787719
+    - path: data/processed/test_examples.parquet
+      hash: md5
+      md5: afa6c39421fead668b91cad6b1579c7a
+      size: 1074522
+    - path: data/processed/train_examples.parquet
+      hash: md5
+      md5: 3f10d87fe132106e96202f73970ab57b
+      size: 9525105
+    - path: data/processed/val_examples.parquet
+      hash: md5
+      md5: b09d74b48f3e208a902256faafb1a52e
+      size: 792692
+  data_version_baseline:
+    cmd: python -m recsys.data.pipeline --stage all --config configs/data_config.yaml
+      --params configs/data_versions/baseline.yaml
+    deps:
+    - path: configs/data_config.yaml
+      hash: md5
+      md5: 97db55b9c28440e31047533e005eef04
+      size: 1986
+    - path: configs/data_versions/baseline.yaml
+      hash: md5
+      md5: 143455e4d64a3d46ff45d4bb49881e86
+      size: 856
+    - path: data/raw/train-item-views.csv
+      hash: md5
+      md5: cd4fadae46ed46233a2ea53c2c1c605d
+      size: 43899457
+    - path: src/recsys/data/ingest.py
+      hash: md5
+      md5: cdeacd1298f32f353b350349cb5423e0
+      size: 3913
+    - path: src/recsys/data/pipeline.py
+      hash: md5
+      md5: a87de94fe9ad9358f3715666fe7c7df2
+      size: 2451
+    - path: src/recsys/data/preprocessor.py
+      hash: md5
+      md5: f73621ef0d6a3daa659f14a6ecd14105
+      size: 9970
+    - path: src/recsys/data/splitter.py
+      hash: md5
+      md5: 47e0752e7f8f502fc92851b93fde2a6f
+      size: 7940
+    - path: src/recsys/data/stages.py
+      hash: md5
+      md5: 19dac98b1d57576f0447f21e22781916
+      size: 17898
+    - path: src/recsys/data/training_examples.py
+      hash: md5
+      md5: b058355a3b6b187f26c805fc8f0da13a
+      size: 15082
+    - path: src/recsys/data/validator.py
+      hash: md5
+      md5: 593f8c7c87565cf978eb3025844f1dfe
+      size: 6899
+    - path: src/recsys/utils/config.py
+      hash: md5
+      md5: 336a1e58637295c78d603ab44948c084
+      size: 5098
+    outs:
+    - path: data/versions/baseline/interim/clean_interactions.parquet
+      hash: md5
+      md5: d0567ff9281993c467c47ecdc4cbb66a
+      size: 9142115
+    - path: data/versions/baseline/interim/interactions.parquet
+      hash: md5
+      md5: c8c6881941e80cb70fc1c58850ae9e3a
+      size: 14185439
+    - path: data/versions/baseline/interim/test_interactions.parquet
+      hash: md5
+      md5: a65e9d85583516dfc6311c4a47545b3c
+      size: 810051
+    - path: data/versions/baseline/interim/train_interactions.parquet
+      hash: md5
+      md5: 745f5efbef13e02c5cc7363da7a23111
+      size: 7988979
+    - path: data/versions/baseline/interim/val_interactions.parquet
+      hash: md5
+      md5: d3c8c9c4011b9c5c505b6f7806cb8d6f
+      size: 588789
+    - path: data/versions/baseline/processed/data_stats.json
+      hash: md5
+      md5: cf442ed55cd77e5d71f59698b4236e76
+      size: 996
+    - path: data/versions/baseline/processed/item_vocab.json
+      hash: md5
+      md5: d333f3b7f18f5dfca061694cb91137c4
+      size: 1608508
+    - path: data/versions/baseline/processed/test_examples.parquet
+      hash: md5
+      md5: 54a4a546549f5905c40b62d439cf8c9c
+      size: 976139
+    - path: data/versions/baseline/processed/train_examples.parquet
+      hash: md5
+      md5: 5257e676ca8d7f84b040332a508a03da
+      size: 8845628
+    - path: data/versions/baseline/processed/val_examples.parquet
+      hash: md5
+      md5: e9a53636f4774ac45fdb7e3fb57cf7b9
+      size: 712710
+    - path: data/versions/baseline/validation_report.json
+      hash: md5
+      md5: ab88e071348c8b5c4ab02c3248392591
+      size: 1831
+  data_version_v1:
+    cmd: python -m recsys.data.pipeline --stage all --config configs/data_config.yaml
+      --params configs/data_versions/v1_strict_filter.yaml
+    deps:
+    - path: configs/data_config.yaml
+      hash: md5
+      md5: 97db55b9c28440e31047533e005eef04
+      size: 1986
+    - path: configs/data_versions/v1_strict_filter.yaml
+      hash: md5
+      md5: 9f36c501ec5d6b5e90ec77409a4f5f96
+      size: 913
+    - path: data/raw/train-item-views.csv
+      hash: md5
+      md5: cd4fadae46ed46233a2ea53c2c1c605d
+      size: 43899457
+    - path: src/recsys/data/ingest.py
+      hash: md5
+      md5: cdeacd1298f32f353b350349cb5423e0
+      size: 3913
+    - path: src/recsys/data/pipeline.py
+      hash: md5
+      md5: a87de94fe9ad9358f3715666fe7c7df2
+      size: 2451
+    - path: src/recsys/data/preprocessor.py
+      hash: md5
+      md5: f73621ef0d6a3daa659f14a6ecd14105
+      size: 9970
+    - path: src/recsys/data/splitter.py
+      hash: md5
+      md5: 47e0752e7f8f502fc92851b93fde2a6f
+      size: 7940
+    - path: src/recsys/data/stages.py
+      hash: md5
+      md5: 19dac98b1d57576f0447f21e22781916
+      size: 17898
+    - path: src/recsys/data/training_examples.py
+      hash: md5
+      md5: b058355a3b6b187f26c805fc8f0da13a
+      size: 15082
+    - path: src/recsys/data/validator.py
+      hash: md5
+      md5: 593f8c7c87565cf978eb3025844f1dfe
+      size: 6899
+    - path: src/recsys/utils/config.py
+      hash: md5
+      md5: 336a1e58637295c78d603ab44948c084
+      size: 5098
+    outs:
+    - path: data/versions/v1_strict_filter/interim/clean_interactions.parquet
+      hash: md5
+      md5: 5b8adb94194c7afe37c0545e536366a0
+      size: 7767719
+    - path: data/versions/v1_strict_filter/interim/interactions.parquet
+      hash: md5
+      md5: c8c6881941e80cb70fc1c58850ae9e3a
+      size: 14185439
+    - path: data/versions/v1_strict_filter/interim/test_interactions.parquet
+      hash: md5
+      md5: 58af388885ab89633be218660f287d26
+      size: 674728
+    - path: data/versions/v1_strict_filter/interim/train_interactions.parquet
+      hash: md5
+      md5: 780276ea1f26901a4d66bd0ffeb7ecd3
+      size: 6715137
+    - path: data/versions/v1_strict_filter/interim/val_interactions.parquet
+      hash: md5
+      md5: e0d3f925fdf20b6c1def6b7885644a1c
+      size: 495264
+    - path: data/versions/v1_strict_filter/processed/data_stats.json
+      hash: md5
+      md5: ef3aa03dfaee0d3a0bffebf50a906b05
+      size: 995
+    - path: data/versions/v1_strict_filter/processed/item_vocab.json
+      hash: md5
+      md5: 0541b8d488b341e01af36dfb4fcc6e9e
+      size: 903680
+    - path: data/versions/v1_strict_filter/processed/test_examples.parquet
+      hash: md5
+      md5: 00fdc04f23639f64e6618497c58ea599
+      size: 775032
+    - path: data/versions/v1_strict_filter/processed/train_examples.parquet
+      hash: md5
+      md5: 710c99602b5797d3f21e868b00dea98d
+      size: 8141046
+    - path: data/versions/v1_strict_filter/processed/val_examples.parquet
+      hash: md5
+      md5: 63d8a0137bcb928b83557681b6cc2957
+      size: 572191
+    - path: data/versions/v1_strict_filter/validation_report.json
+      hash: md5
+      md5: 01f8d44f807f1b42eaf36fb03c5e5850
+      size: 1831
+  data_version_v2:
+    cmd: python -m recsys.data.pipeline --stage all --config configs/data_config.yaml
+      --params configs/data_versions/v2_sliding_window.yaml
+    deps:
+    - path: configs/data_config.yaml
+      hash: md5
+      md5: 97db55b9c28440e31047533e005eef04
+      size: 1986
+    - path: configs/data_versions/v2_sliding_window.yaml
+      hash: md5
+      md5: 1174d784f984660ee3232cfc4f007f8b
+      size: 919
+    - path: data/raw/train-item-views.csv
+      hash: md5
+      md5: cd4fadae46ed46233a2ea53c2c1c605d
+      size: 43899457
+    - path: src/recsys/data/ingest.py
+      hash: md5
+      md5: cdeacd1298f32f353b350349cb5423e0
+      size: 3913
+    - path: src/recsys/data/pipeline.py
+      hash: md5
+      md5: a87de94fe9ad9358f3715666fe7c7df2
+      size: 2451
+    - path: src/recsys/data/preprocessor.py
+      hash: md5
+      md5: f73621ef0d6a3daa659f14a6ecd14105
+      size: 9970
+    - path: src/recsys/data/splitter.py
+      hash: md5
+      md5: 47e0752e7f8f502fc92851b93fde2a6f
+      size: 7940
+    - path: src/recsys/data/stages.py
+      hash: md5
+      md5: 19dac98b1d57576f0447f21e22781916
+      size: 17898
+    - path: src/recsys/data/training_examples.py
+      hash: md5
+      md5: b058355a3b6b187f26c805fc8f0da13a
+      size: 15082
+    - path: src/recsys/data/validator.py
+      hash: md5
+      md5: 593f8c7c87565cf978eb3025844f1dfe
+      size: 6899
+    - path: src/recsys/utils/config.py
+      hash: md5
+      md5: 336a1e58637295c78d603ab44948c084
+      size: 5098
+    outs:
+    - path: data/versions/v2_sliding_window/interim/clean_interactions.parquet
+      hash: md5
+      md5: 87160b19a46fd36b4c73e613ce4da046
+      size: 10569953
+    - path: data/versions/v2_sliding_window/interim/interactions.parquet
+      hash: md5
+      md5: c8c6881941e80cb70fc1c58850ae9e3a
+      size: 14185439
+    - path: data/versions/v2_sliding_window/interim/test_interactions.parquet
+      hash: md5
+      md5: 2ee76cc5876801947e0e9df66d0058d2
+      size: 941425
+    - path: data/versions/v2_sliding_window/interim/train_interactions.parquet
+      hash: md5
+      md5: 912ad120b4cdf18e993744a0f58dbc63
+      size: 9245244
+    - path: data/versions/v2_sliding_window/interim/val_interactions.parquet
+      hash: md5
+      md5: 3b5a623ebb22d2864601ad5c3e3a413e
+      size: 695054
+    - path: data/versions/v2_sliding_window/processed/data_stats.json
+      hash: md5
+      md5: fe767fa26240569a3ad24295a872beda
+      size: 997
+    - path: data/versions/v2_sliding_window/processed/item_vocab.json
+      hash: md5
+      md5: fd8f08034b0c4a6e7e2e4d321e34b1ac
+      size: 1702402
+    - path: data/versions/v2_sliding_window/processed/test_examples.parquet
+      hash: md5
+      md5: 33e3644b803d558de0a5dd7fed456926
+      size: 911701
+    - path: data/versions/v2_sliding_window/processed/train_examples.parquet
+      hash: md5
+      md5: 6ca9b3d93c07302340b0a4025a571b04
+      size: 7956255
+    - path: data/versions/v2_sliding_window/processed/val_examples.parquet
+      hash: md5
+      md5: dac074d9592d89aac717762802232406
+      size: 657852
+    - path: data/versions/v2_sliding_window/validation_report.json
+      hash: md5
+      md5: fb80f5779c884a50d55cb5a48326436f
+      size: 1830

@@ -1,0 +1,86 @@
+stages:
+  compare_data_versions:
+    wdir: ../..
+    cmd: python -m recsys.training.compare_versions --spec baseline,metrics/baseline/training_metrics.json,metrics/baseline/evaluation_metrics.json --spec v1_strict_filter,metrics/v1_strict_filter/training_metrics.json,metrics/v1_strict_filter/evaluation_metrics.json --spec v2_sliding_window,metrics/v2_sliding_window/training_metrics.json,metrics/v2_sliding_window/evaluation_metrics.json --drift-spec baseline,metrics/monitoring/drift_baseline.json --drift-spec v1_vs_v2,metrics/monitoring/drift_v1_vs_v2.json --drift-spec synthetic_oov,metrics/monitoring/drift_synthetic_oov.json --output metrics/data_version_comparison.json
+    deps:
+      - src/recsys/training/compare_versions.py
+      - metrics/baseline/training_metrics.json
+      - metrics/baseline/evaluation_metrics.json
+      - metrics/v1_strict_filter/training_metrics.json
+      - metrics/v1_strict_filter/evaluation_metrics.json
+      - metrics/v2_sliding_window/training_metrics.json
+      - metrics/v2_sliding_window/evaluation_metrics.json
+      - metrics/monitoring/drift_baseline.json
+      - metrics/monitoring/drift_v1_vs_v2.json
+      - metrics/monitoring/drift_synthetic_oov.json
+    metrics:
+      - metrics/data_version_comparison.json:
+          cache: false
+
+  drift_baseline:
+    wdir: ../..
+    cmd: >
+      python -m recsys.monitoring.drift
+      --reference data/versions/v1_strict_filter/interim/train_interactions.parquet
+      --current data/versions/v1_strict_filter/interim/train_interactions.parquet
+      --vocab data/versions/v1_strict_filter/processed/item_vocab.json
+      --output metrics/monitoring/drift_baseline.json
+      --html reports/monitoring/evidently_baseline.html
+    deps:
+      - src/recsys/monitoring/features.py
+      - src/recsys/monitoring/drift.py
+      - src/recsys/monitoring/evidently_report.py
+      - data/versions/v1_strict_filter/interim/train_interactions.parquet
+      - data/versions/v1_strict_filter/processed/item_vocab.json
+    metrics:
+      - metrics/monitoring/drift_baseline.json:
+          cache: false
+    outs:
+      - reports/monitoring/evidently_baseline.html:
+          cache: false
+
+  drift_v1_vs_v2:
+    wdir: ../..
+    cmd: >
+      python -m recsys.monitoring.drift
+      --reference data/versions/v1_strict_filter/interim/train_interactions.parquet
+      --current data/versions/v2_sliding_window/interim/test_interactions.parquet
+      --vocab data/versions/v1_strict_filter/processed/item_vocab.json
+      --output metrics/monitoring/drift_v1_vs_v2.json
+      --html reports/monitoring/evidently_v1_vs_v2.html
+    deps:
+      - src/recsys/monitoring/features.py
+      - src/recsys/monitoring/drift.py
+      - src/recsys/monitoring/evidently_report.py
+      - data/versions/v1_strict_filter/interim/train_interactions.parquet
+      - data/versions/v2_sliding_window/interim/test_interactions.parquet
+      - data/versions/v1_strict_filter/processed/item_vocab.json
+    metrics:
+      - metrics/monitoring/drift_v1_vs_v2.json:
+          cache: false
+    outs:
+      - reports/monitoring/evidently_v1_vs_v2.html:
+          cache: false
+
+  drift_synthetic_oov:
+    wdir: ../..
+    cmd: >
+      python -m recsys.monitoring.drift
+      --reference data/versions/v1_strict_filter/interim/train_interactions.parquet
+      --current data/versions/v1_strict_filter/interim/train_interactions.parquet
+      --vocab data/versions/v1_strict_filter/processed/item_vocab.json
+      --inject-oov-rate 0.30
+      --output metrics/monitoring/drift_synthetic_oov.json
+      --html reports/monitoring/evidently_synthetic_oov.html
+    deps:
+      - src/recsys/monitoring/features.py
+      - src/recsys/monitoring/drift.py
+      - src/recsys/monitoring/evidently_report.py
+      - data/versions/v1_strict_filter/interim/train_interactions.parquet
+      - data/versions/v1_strict_filter/processed/item_vocab.json
+    metrics:
+      - metrics/monitoring/drift_synthetic_oov.json:
+          cache: false
+    outs:
+      - reports/monitoring/evidently_synthetic_oov.html:
+          cache: false

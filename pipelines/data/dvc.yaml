@@ -1,0 +1,198 @@
+stages:
+  ingest:
+    wdir: ../..
+    cmd: python -m recsys.data.pipeline --stage ingest --config configs/data_config.yaml --params params.yaml
+    deps:
+      - src/recsys/data/pipeline.py
+      - src/recsys/data/ingest.py
+      - src/recsys/data/stages.py
+      - src/recsys/utils/config.py
+      - configs/data_config.yaml
+      - data/raw/train-item-views.csv
+    outs:
+      - data/interim/interactions.parquet
+    metrics:
+      - metrics/ingest_report.json:
+          cache: false
+
+  validate:
+    wdir: ../..
+    cmd: python -m recsys.data.pipeline --stage validate --config configs/data_config.yaml --params params.yaml
+    params:
+      - params.yaml:
+          - data.validation.min_session_length
+          - data.validation.max_session_length
+          - data.validation.allow_duplicates
+    deps:
+      - src/recsys/data/pipeline.py
+      - src/recsys/data/validator.py
+      - src/recsys/data/stages.py
+      - src/recsys/utils/config.py
+      - configs/data_config.yaml
+      - data/interim/interactions.parquet
+    metrics:
+      - data/validation_report.json:
+          cache: false
+
+  preprocess:
+    wdir: ../..
+    cmd: python -m recsys.data.pipeline --stage preprocess --config configs/data_config.yaml --params params.yaml
+    params:
+      - params.yaml:
+          - data.validation.min_session_length
+          - data.validation.max_session_length
+          - data.validation.min_item_frequency
+          - data.validation.allow_duplicates
+          - data.parquet_compression
+    deps:
+      - src/recsys/data/pipeline.py
+      - src/recsys/data/preprocessor.py
+      - src/recsys/data/stages.py
+      - src/recsys/utils/config.py
+      - configs/data_config.yaml
+      - data/interim/interactions.parquet
+    outs:
+      - data/interim/clean_interactions.parquet
+
+  split:
+    wdir: ../..
+    cmd: python -m recsys.data.pipeline --stage split --config configs/data_config.yaml --params params.yaml
+    params:
+      - params.yaml:
+          - data.temporal_split.strategy
+          - data.temporal_split.test_days
+          - data.temporal_split.val_days
+          - data.temporal_split.val_ratio
+          - data.temporal_split.test_ratio
+          - data.parquet_compression
+    deps:
+      - src/recsys/data/pipeline.py
+      - src/recsys/data/splitter.py
+      - src/recsys/data/stages.py
+      - src/recsys/utils/config.py
+      - configs/data_config.yaml
+      - data/interim/clean_interactions.parquet
+    outs:
+      - data/interim/train_interactions.parquet
+      - data/interim/val_interactions.parquet
+      - data/interim/test_interactions.parquet
+
+  build_examples:
+    wdir: ../..
+    cmd: python -m recsys.data.pipeline --stage build_examples --config configs/data_config.yaml --params params.yaml
+    params:
+      - params.yaml:
+          - data.training_example_format
+          - data.compatibility.vocab_order
+          - data.compatibility.example_order
+          - data.parquet_compression
+    deps:
+      - src/recsys/data/pipeline.py
+      - src/recsys/data/training_examples.py
+      - src/recsys/data/stages.py
+      - src/recsys/utils/config.py
+      - configs/data_config.yaml
+      - data/interim/train_interactions.parquet
+      - data/interim/val_interactions.parquet
+      - data/interim/test_interactions.parquet
+    outs:
+      - data/processed/train_examples.parquet
+      - data/processed/val_examples.parquet
+      - data/processed/test_examples.parquet
+      - data/processed/item_vocab.json
+    metrics:
+      - data/processed/data_stats.json:
+          cache: false
+
+  data_version_baseline:
+    wdir: ../..
+    cmd: python -m recsys.data.pipeline --stage all --config configs/data_config.yaml --params configs/data_versions/baseline.yaml
+    deps:
+      - src/recsys/data/pipeline.py
+      - src/recsys/data/ingest.py
+      - src/recsys/data/validator.py
+      - src/recsys/data/preprocessor.py
+      - src/recsys/data/splitter.py
+      - src/recsys/data/training_examples.py
+      - src/recsys/data/stages.py
+      - src/recsys/utils/config.py
+      - configs/data_config.yaml
+      - configs/data_versions/baseline.yaml
+      - data/raw/train-item-views.csv
+    outs:
+      - data/versions/baseline/interim/interactions.parquet
+      - data/versions/baseline/interim/clean_interactions.parquet
+      - data/versions/baseline/interim/train_interactions.parquet
+      - data/versions/baseline/interim/val_interactions.parquet
+      - data/versions/baseline/interim/test_interactions.parquet
+      - data/versions/baseline/processed/train_examples.parquet
+      - data/versions/baseline/processed/val_examples.parquet
+      - data/versions/baseline/processed/test_examples.parquet
+      - data/versions/baseline/processed/item_vocab.json
+    metrics:
+      - data/versions/baseline/processed/data_stats.json:
+          cache: false
+      - data/versions/baseline/validation_report.json:
+          cache: false
+
+  data_version_v1:
+    wdir: ../..
+    cmd: python -m recsys.data.pipeline --stage all --config configs/data_config.yaml --params configs/data_versions/v1_strict_filter.yaml
+    deps:
+      - src/recsys/data/pipeline.py
+      - src/recsys/data/ingest.py
+      - src/recsys/data/validator.py
+      - src/recsys/data/preprocessor.py
+      - src/recsys/data/splitter.py
+      - src/recsys/data/training_examples.py
+      - src/recsys/data/stages.py
+      - src/recsys/utils/config.py
+      - configs/data_config.yaml
+      - configs/data_versions/v1_strict_filter.yaml
+      - data/raw/train-item-views.csv
+    outs:
+      - data/versions/v1_strict_filter/interim/interactions.parquet
+      - data/versions/v1_strict_filter/interim/clean_interactions.parquet
+      - data/versions/v1_strict_filter/interim/train_interactions.parquet
+      - data/versions/v1_strict_filter/interim/val_interactions.parquet
+      - data/versions/v1_strict_filter/interim/test_interactions.parquet
+      - data/versions/v1_strict_filter/processed/train_examples.parquet
+      - data/versions/v1_strict_filter/processed/val_examples.parquet
+      - data/versions/v1_strict_filter/processed/test_examples.parquet
+      - data/versions/v1_strict_filter/processed/item_vocab.json
+    metrics:
+      - data/versions/v1_strict_filter/processed/data_stats.json:
+          cache: false
+      - data/versions/v1_strict_filter/validation_report.json:
+          cache: false
+
+  data_version_v2:
+    wdir: ../..
+    cmd: python -m recsys.data.pipeline --stage all --config configs/data_config.yaml --params configs/data_versions/v2_sliding_window.yaml
+    deps:
+      - src/recsys/data/pipeline.py
+      - src/recsys/data/ingest.py
+      - src/recsys/data/validator.py
+      - src/recsys/data/preprocessor.py
+      - src/recsys/data/splitter.py
+      - src/recsys/data/training_examples.py
+      - src/recsys/data/stages.py
+      - src/recsys/utils/config.py
+      - configs/data_config.yaml
+      - configs/data_versions/v2_sliding_window.yaml
+      - data/raw/train-item-views.csv
+    outs:
+      - data/versions/v2_sliding_window/interim/interactions.parquet
+      - data/versions/v2_sliding_window/interim/clean_interactions.parquet
+      - data/versions/v2_sliding_window/interim/train_interactions.parquet
+      - data/versions/v2_sliding_window/interim/val_interactions.parquet
+      - data/versions/v2_sliding_window/interim/test_interactions.parquet
+      - data/versions/v2_sliding_window/processed/train_examples.parquet
+      - data/versions/v2_sliding_window/processed/val_examples.parquet
+      - data/versions/v2_sliding_window/processed/test_examples.parquet
+      - data/versions/v2_sliding_window/processed/item_vocab.json
+    metrics:
+      - data/versions/v2_sliding_window/processed/data_stats.json:
+          cache: false
+      - data/versions/v2_sliding_window/validation_report.json:
+          cache: false

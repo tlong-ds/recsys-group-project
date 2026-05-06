@@ -1,105 +1,6 @@
 stages:
-  ingest:
-    cmd: python -m recsys.data.pipeline --stage ingest --config configs/data_config.yaml --params params.yaml
-    deps:
-      - src/recsys/data/pipeline.py
-      - src/recsys/data/ingest.py
-      - src/recsys/data/stages.py
-      - src/recsys/utils/config.py
-      - configs/data_config.yaml
-      - data/raw/train-item-views.csv
-    outs:
-      - data/interim/interactions.parquet
-    metrics:
-      - metrics/ingest_report.json:
-          cache: false
-
-  validate:
-    cmd: python -m recsys.data.pipeline --stage validate --config configs/data_config.yaml --params params.yaml
-    params:
-      - params.yaml:
-          - data.validation.min_session_length
-          - data.validation.max_session_length
-          - data.validation.allow_duplicates
-    deps:
-      - src/recsys/data/pipeline.py
-      - src/recsys/data/validator.py
-      - src/recsys/data/stages.py
-      - src/recsys/utils/config.py
-      - configs/data_config.yaml
-      - data/interim/interactions.parquet
-    metrics:
-      - data/validation_report.json:
-          cache: false
-
-  preprocess:
-    cmd: python -m recsys.data.pipeline --stage preprocess --config configs/data_config.yaml --params params.yaml
-    params:
-      - params.yaml:
-          - data.validation.min_session_length
-          - data.validation.max_session_length
-          - data.validation.min_item_frequency
-          - data.validation.allow_duplicates
-          - data.parquet_compression
-    deps:
-      - src/recsys/data/pipeline.py
-      - src/recsys/data/preprocessor.py
-      - src/recsys/data/stages.py
-      - src/recsys/utils/config.py
-      - configs/data_config.yaml
-      - data/interim/interactions.parquet
-    outs:
-      - data/interim/clean_interactions.parquet
-
-  split:
-    cmd: python -m recsys.data.pipeline --stage split --config configs/data_config.yaml --params params.yaml
-    params:
-      - params.yaml:
-          - data.temporal_split.strategy
-          - data.temporal_split.test_days
-          - data.temporal_split.val_days
-          - data.temporal_split.val_ratio
-          - data.temporal_split.test_ratio
-          - data.parquet_compression
-    deps:
-      - src/recsys/data/pipeline.py
-      - src/recsys/data/splitter.py
-      - src/recsys/data/stages.py
-      - src/recsys/utils/config.py
-      - configs/data_config.yaml
-      - data/interim/clean_interactions.parquet
-    outs:
-      - data/interim/train_interactions.parquet
-      - data/interim/val_interactions.parquet
-      - data/interim/test_interactions.parquet
-
-  build_examples:
-    cmd: python -m recsys.data.pipeline --stage build_examples --config configs/data_config.yaml --params params.yaml
-    params:
-      - params.yaml:
-          - data.training_example_format
-          - data.compatibility.vocab_order
-          - data.compatibility.example_order
-          - data.parquet_compression
-    deps:
-      - src/recsys/data/pipeline.py
-      - src/recsys/data/training_examples.py
-      - src/recsys/data/stages.py
-      - src/recsys/utils/config.py
-      - configs/data_config.yaml
-      - data/interim/train_interactions.parquet
-      - data/interim/val_interactions.parquet
-      - data/interim/test_interactions.parquet
-    outs:
-      - data/processed/train_examples.parquet
-      - data/processed/val_examples.parquet
-      - data/processed/test_examples.parquet
-      - data/processed/item_vocab.json
-    metrics:
-      - data/processed/data_stats.json:
-          cache: false
-
   train_baseline:
+    wdir: ../..
     cmd: python -m recsys.training.pipeline --stage train --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params params.yaml --registry-root models/trained/baseline --train-metrics-path metrics/baseline/training_metrics.json
     params:
       - params.yaml:
@@ -135,7 +36,6 @@ stages:
       - src/recsys/training/tracking.py
       - src/recsys/models/graph_helpers.py
       - src/recsys/models/srgnn.py
-      # - src/recsys/models/tagnn.py
       - src/recsys/models/ggnn.py
       - src/recsys/evaluation/evaluator.py
       - src/recsys/evaluation/metrics.py
@@ -157,6 +57,7 @@ stages:
           cache: false
 
   eval_baseline:
+    wdir: ../..
     cmd: python -m recsys.training.pipeline --stage evaluate --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params params.yaml --registry-root models/trained/baseline --evaluation-metrics-path metrics/baseline/evaluation_metrics.json
     params:
       - params.yaml:
@@ -181,7 +82,6 @@ stages:
       - src/recsys/training/registry.py
       - src/recsys/models/graph_helpers.py
       - src/recsys/models/srgnn.py
-      # - src/recsys/models/tagnn.py
       - src/recsys/models/ggnn.py
       - src/recsys/evaluation/evaluator.py
       - src/recsys/evaluation/metrics.py
@@ -198,103 +98,13 @@ stages:
       - metrics/baseline/evaluation_metrics.json:
           cache: false
 
-  data_version_baseline:
-    cmd: python -m recsys.data.pipeline --stage all --config configs/data_config.yaml --params configs/data_versions/baseline.yaml
-    deps:
-      - src/recsys/data/pipeline.py
-      - src/recsys/data/ingest.py
-      - src/recsys/data/validator.py
-      - src/recsys/data/preprocessor.py
-      - src/recsys/data/splitter.py
-      - src/recsys/data/training_examples.py
-      - src/recsys/data/stages.py
-      - src/recsys/utils/config.py
-      - configs/data_config.yaml
-      - configs/data_versions/baseline.yaml
-      - data/raw/train-item-views.csv
-    outs:
-      - data/versions/baseline/interim/interactions.parquet
-      - data/versions/baseline/interim/clean_interactions.parquet
-      - data/versions/baseline/interim/train_interactions.parquet
-      - data/versions/baseline/interim/val_interactions.parquet
-      - data/versions/baseline/interim/test_interactions.parquet
-      - data/versions/baseline/processed/train_examples.parquet
-      - data/versions/baseline/processed/val_examples.parquet
-      - data/versions/baseline/processed/test_examples.parquet
-      - data/versions/baseline/processed/item_vocab.json
-    metrics:
-      - data/versions/baseline/processed/data_stats.json:
-          cache: false
-      - data/versions/baseline/validation_report.json:
-          cache: false
-
-  data_version_v1:
-    cmd: python -m recsys.data.pipeline --stage all --config configs/data_config.yaml --params configs/data_versions/v1_strict_filter.yaml
-    deps:
-      - src/recsys/data/pipeline.py
-      - src/recsys/data/ingest.py
-      - src/recsys/data/validator.py
-      - src/recsys/data/preprocessor.py
-      - src/recsys/data/splitter.py
-      - src/recsys/data/training_examples.py
-      - src/recsys/data/stages.py
-      - src/recsys/utils/config.py
-      - configs/data_config.yaml
-      - configs/data_versions/v1_strict_filter.yaml
-      - data/raw/train-item-views.csv
-    outs:
-      - data/versions/v1_strict_filter/interim/interactions.parquet
-      - data/versions/v1_strict_filter/interim/clean_interactions.parquet
-      - data/versions/v1_strict_filter/interim/train_interactions.parquet
-      - data/versions/v1_strict_filter/interim/val_interactions.parquet
-      - data/versions/v1_strict_filter/interim/test_interactions.parquet
-      - data/versions/v1_strict_filter/processed/train_examples.parquet
-      - data/versions/v1_strict_filter/processed/val_examples.parquet
-      - data/versions/v1_strict_filter/processed/test_examples.parquet
-      - data/versions/v1_strict_filter/processed/item_vocab.json
-    metrics:
-      - data/versions/v1_strict_filter/processed/data_stats.json:
-          cache: false
-      - data/versions/v1_strict_filter/validation_report.json:
-          cache: false
-
-  data_version_v2:
-    cmd: python -m recsys.data.pipeline --stage all --config configs/data_config.yaml --params configs/data_versions/v2_sliding_window.yaml
-    deps:
-      - src/recsys/data/pipeline.py
-      - src/recsys/data/ingest.py
-      - src/recsys/data/validator.py
-      - src/recsys/data/preprocessor.py
-      - src/recsys/data/splitter.py
-      - src/recsys/data/training_examples.py
-      - src/recsys/data/stages.py
-      - src/recsys/utils/config.py
-      - configs/data_config.yaml
-      - configs/data_versions/v2_sliding_window.yaml
-      - data/raw/train-item-views.csv
-    outs:
-      - data/versions/v2_sliding_window/interim/interactions.parquet
-      - data/versions/v2_sliding_window/interim/clean_interactions.parquet
-      - data/versions/v2_sliding_window/interim/train_interactions.parquet
-      - data/versions/v2_sliding_window/interim/val_interactions.parquet
-      - data/versions/v2_sliding_window/interim/test_interactions.parquet
-      - data/versions/v2_sliding_window/processed/train_examples.parquet
-      - data/versions/v2_sliding_window/processed/val_examples.parquet
-      - data/versions/v2_sliding_window/processed/test_examples.parquet
-      - data/versions/v2_sliding_window/processed/item_vocab.json
-    metrics:
-      - data/versions/v2_sliding_window/processed/data_stats.json:
-          cache: false
-      - data/versions/v2_sliding_window/validation_report.json:
-          cache: false
-
   train_v1:
-    cmd: python -m recsys.training.pipeline --stage train --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_profiles/srgnn.yaml --training-config configs/training_config.yaml --params configs/data_versions/v1_strict_filter.yaml --registry-root models/trained/v1_strict_filter --train-metrics-path metrics/v1_strict_filter/training_metrics.json
+    wdir: ../..
+    cmd: python -m recsys.training.pipeline --stage train --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params params.yaml --data-params configs/data_versions/v1_strict_filter.yaml --registry-root models/trained/v1_strict_filter --train-metrics-path metrics/v1_strict_filter/training_metrics.json
     params:
-      - configs/model_profiles/srgnn.yaml:
+      - params.yaml:
           - model.type
           - model.variant
-          - model.device
           - model.name
           - model.version
           - model.embedding_dim
@@ -302,8 +112,6 @@ stages:
           - model.step
           - model.max_session_length
           - model.fallback_weight
-          - model.score_chunk_size
-      - configs/training_config.yaml:
           - training.top_k
     deps:
       - src/recsys/training/pipeline.py
@@ -313,16 +121,17 @@ stages:
       - src/recsys/training/tracking.py
       - src/recsys/models/graph_helpers.py
       - src/recsys/models/srgnn.py
-      # - src/recsys/models/tagnn.py
       - src/recsys/models/ggnn.py
+      - src/recsys/models/tagnn.py
       - src/recsys/evaluation/evaluator.py
       - src/recsys/evaluation/metrics.py
       - src/recsys/utils/config.py
       - src/recsys/utils/logger.py
       - configs/data_config.yaml
-      - configs/model_profiles/srgnn.yaml
+      - configs/model_config.yaml
       - configs/training_config.yaml
       - configs/data_versions/v1_strict_filter.yaml
+      - params.yaml
       - data/versions/v1_strict_filter/processed/train_examples.parquet
       - data/versions/v1_strict_filter/processed/val_examples.parquet
       - data/versions/v1_strict_filter/processed/item_vocab.json
@@ -335,21 +144,14 @@ stages:
           cache: false
 
   eval_v1:
-    cmd: python -m recsys.training.pipeline --stage evaluate --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_profiles/srgnn.yaml --training-config configs/training_config.yaml --params configs/data_versions/v1_strict_filter.yaml --registry-root models/trained/v1_strict_filter --evaluation-metrics-path metrics/v1_strict_filter/evaluation_metrics.json
+    wdir: ../..
+    cmd: python -m recsys.training.pipeline --stage evaluate --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params params.yaml --data-params configs/data_versions/v1_strict_filter.yaml --registry-root models/trained/v1_strict_filter --evaluation-metrics-path metrics/v1_strict_filter/evaluation_metrics.json
     params:
-      - configs/model_profiles/srgnn.yaml:
+      - params.yaml:
           - model.type
           - model.variant
-          - model.device
-          - model.name
-          - model.version
-          - model.embedding_dim
-          - model.hidden_size
-          - model.step
-          - model.max_session_length
-          - model.fallback_weight
-          - model.score_chunk_size
       - configs/training_config.yaml:
+          - training.device
           - training.top_k
     deps:
       - src/recsys/training/pipeline.py
@@ -358,16 +160,17 @@ stages:
       - src/recsys/training/registry.py
       - src/recsys/models/graph_helpers.py
       - src/recsys/models/srgnn.py
-      # - src/recsys/models/tagnn.py
       - src/recsys/models/ggnn.py
+      - src/recsys/models/tagnn.py
       - src/recsys/evaluation/evaluator.py
       - src/recsys/evaluation/metrics.py
       - src/recsys/utils/config.py
       - src/recsys/utils/logger.py
       - configs/data_config.yaml
-      - configs/model_profiles/srgnn.yaml
+      - configs/model_config.yaml
       - configs/training_config.yaml
       - configs/data_versions/v1_strict_filter.yaml
+      - params.yaml
       - models/trained/v1_strict_filter/latest
       - data/versions/v1_strict_filter/processed/test_examples.parquet
       - data/versions/v1_strict_filter/processed/data_stats.json
@@ -376,12 +179,12 @@ stages:
           cache: false
 
   train_v2:
-    cmd: python -m recsys.training.pipeline --stage train --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_profiles/srgnn.yaml --training-config configs/training_config.yaml --params configs/data_versions/v2_sliding_window.yaml --registry-root models/trained/v2_sliding_window --train-metrics-path metrics/v2_sliding_window/training_metrics.json
+    wdir: ../..
+    cmd: python -m recsys.training.pipeline --stage train --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params params.yaml --data-params configs/data_versions/v2_sliding_window.yaml --registry-root models/trained/v2_sliding_window --train-metrics-path metrics/v2_sliding_window/training_metrics.json
     params:
-      - configs/model_profiles/srgnn.yaml:
+      - params.yaml:
           - model.type
           - model.variant
-          - model.device
           - model.name
           - model.version
           - model.embedding_dim
@@ -389,8 +192,6 @@ stages:
           - model.step
           - model.max_session_length
           - model.fallback_weight
-          - model.score_chunk_size
-      - configs/training_config.yaml:
           - training.top_k
     deps:
       - src/recsys/training/pipeline.py
@@ -400,16 +201,17 @@ stages:
       - src/recsys/training/tracking.py
       - src/recsys/models/graph_helpers.py
       - src/recsys/models/srgnn.py
-      # - src/recsys/models/tagnn.py
       - src/recsys/models/ggnn.py
+      - src/recsys/models/tagnn.py
       - src/recsys/evaluation/evaluator.py
       - src/recsys/evaluation/metrics.py
       - src/recsys/utils/config.py
       - src/recsys/utils/logger.py
       - configs/data_config.yaml
-      - configs/model_profiles/srgnn.yaml
+      - configs/model_config.yaml
       - configs/training_config.yaml
       - configs/data_versions/v2_sliding_window.yaml
+      - params.yaml
       - data/versions/v2_sliding_window/processed/train_examples.parquet
       - data/versions/v2_sliding_window/processed/val_examples.parquet
       - data/versions/v2_sliding_window/processed/item_vocab.json
@@ -422,21 +224,14 @@ stages:
           cache: false
 
   eval_v2:
-    cmd: python -m recsys.training.pipeline --stage evaluate --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_profiles/srgnn.yaml --training-config configs/training_config.yaml --params configs/data_versions/v2_sliding_window.yaml --registry-root models/trained/v2_sliding_window --evaluation-metrics-path metrics/v2_sliding_window/evaluation_metrics.json
+    wdir: ../..
+    cmd: python -m recsys.training.pipeline --stage evaluate --dvc-mode --data-config configs/data_config.yaml --model-config configs/model_config.yaml --training-config configs/training_config.yaml --params params.yaml --data-params configs/data_versions/v2_sliding_window.yaml --registry-root models/trained/v2_sliding_window --evaluation-metrics-path metrics/v2_sliding_window/evaluation_metrics.json
     params:
-      - configs/model_profiles/srgnn.yaml:
+      - params.yaml:
           - model.type
           - model.variant
-          - model.device
-          - model.name
-          - model.version
-          - model.embedding_dim
-          - model.hidden_size
-          - model.step
-          - model.max_session_length
-          - model.fallback_weight
-          - model.score_chunk_size
       - configs/training_config.yaml:
+          - training.device
           - training.top_k
     deps:
       - src/recsys/training/pipeline.py
@@ -445,16 +240,17 @@ stages:
       - src/recsys/training/registry.py
       - src/recsys/models/graph_helpers.py
       - src/recsys/models/srgnn.py
-      # - src/recsys/models/tagnn.py
       - src/recsys/models/ggnn.py
+      - src/recsys/models/tagnn.py
       - src/recsys/evaluation/evaluator.py
       - src/recsys/evaluation/metrics.py
       - src/recsys/utils/config.py
       - src/recsys/utils/logger.py
       - configs/data_config.yaml
-      - configs/model_profiles/srgnn.yaml
+      - configs/model_config.yaml
       - configs/training_config.yaml
       - configs/data_versions/v2_sliding_window.yaml
+      - params.yaml
       - models/trained/v2_sliding_window/latest
       - data/versions/v2_sliding_window/processed/test_examples.parquet
       - data/versions/v2_sliding_window/processed/data_stats.json
@@ -462,89 +258,8 @@ stages:
       - metrics/v2_sliding_window/evaluation_metrics.json:
           cache: false
 
-  compare_data_versions:
-    cmd: python -m recsys.training.compare_versions --spec baseline,metrics/baseline/training_metrics.json,metrics/baseline/evaluation_metrics.json --spec v1_strict_filter,metrics/v1_strict_filter/training_metrics.json,metrics/v1_strict_filter/evaluation_metrics.json --spec v2_sliding_window,metrics/v2_sliding_window/training_metrics.json,metrics/v2_sliding_window/evaluation_metrics.json --drift-spec baseline,metrics/monitoring/drift_baseline.json --drift-spec v1_vs_v2,metrics/monitoring/drift_v1_vs_v2.json --drift-spec synthetic_oov,metrics/monitoring/drift_synthetic_oov.json --output metrics/data_version_comparison.json
-    deps:
-      - src/recsys/training/compare_versions.py
-      - metrics/baseline/training_metrics.json
-      - metrics/baseline/evaluation_metrics.json
-      - metrics/v1_strict_filter/training_metrics.json
-      - metrics/v1_strict_filter/evaluation_metrics.json
-      - metrics/v2_sliding_window/training_metrics.json
-      - metrics/v2_sliding_window/evaluation_metrics.json
-      - metrics/monitoring/drift_baseline.json
-      - metrics/monitoring/drift_v1_vs_v2.json
-      - metrics/monitoring/drift_synthetic_oov.json
-    metrics:
-      - metrics/data_version_comparison.json:
-          cache: false
-
-  drift_baseline:
-    cmd: >
-      python -m recsys.monitoring.drift
-      --reference data/versions/v1_strict_filter/interim/train_interactions.parquet
-      --current data/versions/v1_strict_filter/interim/train_interactions.parquet
-      --vocab data/versions/v1_strict_filter/processed/item_vocab.json
-      --output metrics/monitoring/drift_baseline.json
-      --html reports/monitoring/evidently_baseline.html
-    deps:
-      - src/recsys/monitoring/features.py
-      - src/recsys/monitoring/drift.py
-      - src/recsys/monitoring/evidently_report.py
-      - data/versions/v1_strict_filter/interim/train_interactions.parquet
-      - data/versions/v1_strict_filter/processed/item_vocab.json
-    metrics:
-      - metrics/monitoring/drift_baseline.json:
-          cache: false
-    outs:
-      - reports/monitoring/evidently_baseline.html:
-          cache: false
-
-  drift_v1_vs_v2:
-    cmd: >
-      python -m recsys.monitoring.drift
-      --reference data/versions/v1_strict_filter/interim/train_interactions.parquet
-      --current data/versions/v2_sliding_window/interim/test_interactions.parquet
-      --vocab data/versions/v1_strict_filter/processed/item_vocab.json
-      --output metrics/monitoring/drift_v1_vs_v2.json
-      --html reports/monitoring/evidently_v1_vs_v2.html
-    deps:
-      - src/recsys/monitoring/features.py
-      - src/recsys/monitoring/drift.py
-      - src/recsys/monitoring/evidently_report.py
-      - data/versions/v1_strict_filter/interim/train_interactions.parquet
-      - data/versions/v2_sliding_window/interim/test_interactions.parquet
-      - data/versions/v1_strict_filter/processed/item_vocab.json
-    metrics:
-      - metrics/monitoring/drift_v1_vs_v2.json:
-          cache: false
-    outs:
-      - reports/monitoring/evidently_v1_vs_v2.html:
-          cache: false
-
-  drift_synthetic_oov:
-    cmd: >
-      python -m recsys.monitoring.drift
-      --reference data/versions/v1_strict_filter/interim/train_interactions.parquet
-      --current data/versions/v1_strict_filter/interim/train_interactions.parquet
-      --vocab data/versions/v1_strict_filter/processed/item_vocab.json
-      --inject-oov-rate 0.30
-      --output metrics/monitoring/drift_synthetic_oov.json
-      --html reports/monitoring/evidently_synthetic_oov.html
-    deps:
-      - src/recsys/monitoring/features.py
-      - src/recsys/monitoring/drift.py
-      - src/recsys/monitoring/evidently_report.py
-      - data/versions/v1_strict_filter/interim/train_interactions.parquet
-      - data/versions/v1_strict_filter/processed/item_vocab.json
-    metrics:
-      - metrics/monitoring/drift_synthetic_oov.json:
-          cache: false
-    outs:
-      - reports/monitoring/evidently_synthetic_oov.html:
-          cache: false
-
   train_matrix:
+    wdir: ../..
     matrix:
       data_version:
         - baseline
@@ -607,7 +322,6 @@ stages:
       - src/recsys/training/mlflow_registry.py
       - src/recsys/models/graph_helpers.py
       - src/recsys/models/srgnn.py
-      # - src/recsys/models/tagnn.py
       - src/recsys/models/ggnn.py
       - src/recsys/evaluation/evaluator.py
       - src/recsys/evaluation/metrics.py
@@ -628,13 +342,13 @@ stages:
           cache: false
 
   train_matrix_slow:
+    wdir: ../..
     matrix:
       data_version:
         - baseline
         - v1_strict_filter
         - v2_sliding_window
       model_profile:
-        #- srgnn_ngc
         - tagnn
     cmd: >
       python -m recsys.training.pipeline --stage train --dvc-mode
@@ -685,9 +399,7 @@ stages:
       - src/recsys/training/tracking.py
       - src/recsys/training/mlflow_registry.py
       - src/recsys/models/graph_helpers.py
-      #- src/recsys/models/srgnn.py
       - src/recsys/models/tagnn.py
-      #- src/recsys/models/ggnn.py
       - src/recsys/evaluation/evaluator.py
       - src/recsys/evaluation/metrics.py
       - src/recsys/utils/config.py
@@ -707,6 +419,7 @@ stages:
           cache: false
 
   evaluate_matrix:
+    wdir: ../..
     matrix:
       data_version:
         - baseline
@@ -752,7 +465,6 @@ stages:
       - src/recsys/training/tracking.py
       - src/recsys/training/registry.py
       - src/recsys/models/srgnn.py
-      # - src/recsys/models/tagnn.py
       - src/recsys/models/ggnn.py
       - src/recsys/evaluation/evaluator.py
       - src/recsys/evaluation/metrics.py
@@ -769,13 +481,13 @@ stages:
           cache: false
 
   evaluate_matrix_slow:
+    wdir: ../..
     matrix:
       data_version:
         - baseline
         - v1_strict_filter
         - v2_sliding_window
       model_profile:
-        #- srgnn_ngc
         - tagnn
     cmd: >
       python -m recsys.training.pipeline --stage evaluate --dvc-mode
@@ -809,9 +521,7 @@ stages:
       - src/recsys/training/pipeline.py
       - src/recsys/training/tracking.py
       - src/recsys/training/registry.py
-      #- src/recsys/models/srgnn.py
       - src/recsys/models/tagnn.py
-      #- src/recsys/models/ggnn.py
       - src/recsys/evaluation/evaluator.py
       - src/recsys/evaluation/metrics.py
       - src/recsys/utils/config.py
@@ -827,6 +537,7 @@ stages:
           cache: false
 
   select_best_model:
+    wdir: ../..
     cmd: >
       python -m recsys.training.select_model
       --select-only
@@ -840,6 +551,7 @@ stages:
           cache: false
 
   retrain_selected_model:
+    wdir: ../..
     cmd: >
       python -m recsys.training.retrain_selected
       --best-model-path metrics/best_model.json
@@ -887,6 +599,7 @@ stages:
           cache: false
 
   promote_retrained_model:
+    wdir: ../..
     cmd: >
       python -m recsys.training.select_model
       --training-config configs/training_config.yaml
