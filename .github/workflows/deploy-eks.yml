@@ -1,0 +1,267 @@
+name: deploy-eks
+
+on:
+  workflow_run:
+    workflows: ["publish-image"]
+    types: [completed]
+    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      apply_terraform:
+        description: "Run terraform apply before deploying manifests"
+        type: boolean
+        required: false
+        default: false
+      image_tag:
+        description: "Container image tag to deploy"
+        required: false
+        default: "main"
+
+permissions:
+  id-token: write
+  contents: read
+  packages: read
+
+concurrency:
+  group: deploy-eks-main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+      DEPLOY_IMAGE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || 'main' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.apply_terraform }}
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform apply
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.apply_terraform }}
+        run: |
+          terraform -chdir=deployment/terraform init -input=false
+          terraform -chdir=deployment/terraform plan -input=false -out=tfplan
+          terraform -chdir=deployment/terraform apply -input=false -auto-approve tfplan
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.30.0
+
+      - name: Configure kubeconfig
+        run: aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deploy-time Python deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Ensure namespace
+        run: kubectl create namespace recsys --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create GHCR pull secret
+        run: |
+          kubectl -n recsys create secret docker-registry ghcr-pull-secret \
+            --docker-server=ghcr.io \
+            --docker-username="${{ secrets.GHCR_USERNAME }}" \
+            --docker-password="${{ secrets.GHCR_TOKEN }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create app secrets
+        run: |
+          kubectl -n recsys create secret generic recsys-secrets \
+            --from-literal=api-keys='${{ secrets.RECSYS_API_KEYS }}' \
+            --from-literal=dagshub-user-token='${{ secrets.DAGSHUB_USER_TOKEN }}' \
+            --from-literal=neon-db-url='${{ secrets.NEON_DB_URL }}' \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create monitoring secrets
+        run: |
+          kubectl -n recsys create secret generic recsys-monitoring-secrets \
+            --from-literal=recsys-api-key='${{ secrets.RECSYS_METRICS_API_KEY }}' \
+            --from-literal=grafana-admin-password='${{ secrets.GRAFANA_ADMIN_PASSWORD }}' \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply model-cache prerequisites
+        run: |
+          kubectl apply -f deployment/kubernetes/api-service-account.yaml
+          kubectl apply -f deployment/kubernetes/recsys-serving-configmap.yaml
+          kubectl apply -f deployment/kubernetes/recsys-model-cache-pvc.yaml
+          kubectl -n recsys wait --for=jsonpath='{.status.phase}'=Bound pvc/recsys-model-cache --timeout=10m
+
+      - name: Resolve production model pin
+        id: model_pin
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          promotion_path = Path("metrics/promotion_result.json")
+          if not promotion_path.exists():
+              raise RuntimeError(
+                  "Missing metrics/promotion_result.json. Run promotion stage before deploy."
+              )
+
+          payload = json.loads(promotion_path.read_text(encoding="utf-8"))
+          if not isinstance(payload, dict):
+              raise ValueError("promotion_result.json must be a JSON object.")
+
+          model_name = str(payload.get("model_name", "")).strip()
+          model_version = str(payload.get("model_version", "")).strip()
+          run_id = str(payload.get("run_id", "")).strip()
+          if not model_name or not model_version or not run_id:
+              raise ValueError(
+                  "promotion_result.json must include model_name/model_version/run_id."
+              )
+
+          if model_name != "recsys-serving":
+              raise ValueError(
+                  "promotion_result.json model_name must be 'recsys-serving' for deploy."
+              )
+
+          if not model_version.isdigit():
+              raise ValueError(f"model_version must be a digit string, got: {model_version}")
+
+          if len(run_id) < 8:
+              raise ValueError(f"run_id seems too short or invalid: {run_id}")
+
+          print(f"Resolved deployment pin from promotion_result.json: {payload}")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
+              handle.write(f"model_name={model_name}\n")
+              handle.write(f"model_version={model_version}\n")
+              handle.write(f"run_id={run_id}\n")
+          PY
+
+      - name: Run model prewarm job
+        env:
+          MODEL_NAME: ${{ steps.model_pin.outputs.model_name }}
+          MODEL_VERSION: ${{ steps.model_pin.outputs.model_version }}
+          RUN_ID: ${{ steps.model_pin.outputs.run_id }}
+        run: |
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE_REF="ghcr.io/${REPO_LOWER}:${DEPLOY_IMAGE_TAG}"
+          JOB_NAME="recsys-model-prewarm-${MODEL_VERSION}-${{ github.run_id }}"
+
+          sed \
+            -e "s|__RECSYS_PREWARM_JOB_NAME__|${JOB_NAME}|g" \
+            -e "s|__RECSYS_API_IMAGE__|${IMAGE_REF}|g" \
+            -e "s|__RECSYS_DEPLOY_MODEL_NAME__|${MODEL_NAME}|g" \
+            -e "s|__RECSYS_DEPLOY_MODEL_VERSION__|${MODEL_VERSION}|g" \
+            -e "s|__RECSYS_DEPLOY_RUN_ID__|${RUN_ID}|g" \
+            deployment/kubernetes/recsys-model-prewarm-job.yaml > /tmp/recsys-model-prewarm-job.yaml
+
+          kubectl -n recsys delete job "${JOB_NAME}" --ignore-not-found=true
+          kubectl apply -f /tmp/recsys-model-prewarm-job.yaml
+          kubectl -n recsys wait --for=condition=Complete --timeout=15m "job/${JOB_NAME}" || {
+            kubectl -n recsys logs "job/${JOB_NAME}" --tail=-1 || true
+            exit 1
+          }
+
+      - name: Inject pinned model env into deployment manifest
+        env:
+          MODEL_NAME: ${{ steps.model_pin.outputs.model_name }}
+          MODEL_VERSION: ${{ steps.model_pin.outputs.model_version }}
+          RUN_ID: ${{ steps.model_pin.outputs.run_id }}
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          import yaml
+
+          path = Path("deployment/kubernetes/api-deployment.yaml")
+          payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+          pod_spec = payload["spec"]["template"]["spec"]
+
+          updates = {
+              "RECSYS_MODEL_CACHE_ROOT": "/app/models/cache",
+              "RECSYS_DEPLOY_MODEL_NAME": os.environ["MODEL_NAME"],
+              "RECSYS_DEPLOY_MODEL_VERSION": os.environ["MODEL_VERSION"],
+              "RECSYS_DEPLOY_RUN_ID": os.environ["RUN_ID"],
+          }
+
+          for key in ("initContainers", "containers"):
+              for container in pod_spec.get(key, []):
+                  env = container.setdefault("env", [])
+                  index = {
+                      item.get("name"): i
+                      for i, item in enumerate(env)
+                      if isinstance(item, dict) and item.get("name")
+                  }
+                  for name, value in updates.items():
+                      replacement = {"name": name, "value": value}
+                      if name in index:
+                          env[index[name]] = replacement
+                      else:
+                          env.append(replacement)
+
+          path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+          PY
+
+      - name: Deploy manifests
+        run: |
+          cd deployment/kubernetes
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          kustomize edit set image ghcr.io/tlong-ds/recsys-group-project=ghcr.io/${REPO_LOWER}:${DEPLOY_IMAGE_TAG}
+          kubectl apply -k .
+
+      - name: Wait for rollouts
+        run: |
+          kubectl -n recsys rollout status deployment/recsys-api --timeout=10m
+          kubectl -n recsys rollout status deployment/prometheus --timeout=5m
+          kubectl -n recsys rollout status deployment/grafana --timeout=5m
+
+      - name: Post-deploy smoke checks
+        env:
+          RECSYS_API_KEYS: ${{ secrets.RECSYS_API_KEYS }}
+        run: |
+          # Get Ingress hostname
+          log() { echo "[smoke-gate] $*"; }
+          
+          log "Resolving ingress hostname (mandatory for production gate)..."
+          # Retry for up to 5 minutes (30 * 10s) as ALBs can take time to provision/update
+          INGRESS_HOST=""
+          for i in {1..30}; do
+            INGRESS_HOST=$(kubectl -n recsys get ingress recsys-api -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || echo "")
+            if [[ -n "$INGRESS_HOST" ]]; then 
+              log "  Successfully resolved ingress: $INGRESS_HOST"
+              break
+            fi
+            log "  Waiting for ingress hostname (attempt $i/30)..."
+            sleep 10
+          done
+
+          if [[ -z "$INGRESS_HOST" ]]; then
+            die "ERROR: Could not resolve ingress hostname after 5 minutes. Smoke tests cannot proceed against the public endpoint."
+          fi
+
+          API_URL="http://${INGRESS_HOST}"
+
+          # Extract the first API key
+          FIRST_KEY=$(echo "$RECSYS_API_KEYS" | cut -d',' -f1)
+
+          log "Running smoke tests against $API_URL"
+          ./scripts/smoke_test.sh --url "$API_URL" --api-key "$FIRST_KEY" --timeout 60
+
+          log "Smoke tests passed successfully against public endpoint."

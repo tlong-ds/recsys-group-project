@@ -71,6 +71,23 @@ Note on enforcement:
 - Missing required columns or empty dataset is a hard failure
 - Semantic issues are reported as warnings and pipeline currently continues
 
+### 4.3 Validation Report Interpretation
+
+The checked-in validation reports are produced against the raw interaction
+window before filtering. A report can therefore show `"valid": false` when the
+raw dataset contains sessions shorter than `min_session_length` or longer than
+`max_session_length`.
+
+That status should be read as a data-quality signal for preprocessing, not as a
+failure of the final training dataset. The training-ready acceptance evidence is
+the processed stats artifact for the same data version, for example:
+
+- `data/versions/v1_strict_filter/processed/data_stats.json`
+- `data/versions/v2_sliding_window/processed/data_stats.json`
+
+Those files summarize the post-filter train/validation/test splits that are
+consumed by the training pipeline.
+
 ## 5. Processing Stages and Guarantees
 
 The pipeline executes the following stages:
@@ -173,7 +190,7 @@ Supported split strategies:
 - ratio_based
 - diginetica_legacy
 - session_based
-- time_based 
+- time_based
 
 Contract requirement:
 - Train/validation/test splits must be temporally ordered per selected strategy
@@ -233,7 +250,7 @@ must include:
 - release note in PR
 - backward compatibility statement
 
-# 12. How to run data processing
+## 12. How to run data processing
 Run full pipeline:
 
 ```bash
@@ -252,8 +269,8 @@ python -m recsys.data.pipeline --stage build_examples --config configs/data_conf
 
 ---
 
-## 12. Contract Version
+## 13. Contract Version
 
 - Effective date: 2026-04-16
-- Version: 1.1
+- Version: 1.2
 - Status: Active

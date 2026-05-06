@@ -10,6 +10,10 @@ uvicorn[standard]>=0.29
 pydantic>=2.7
 pyyaml>=6.0
 loguru>=0.7
+sqlalchemy>=2.0
+python-dotenv>=1.0
+psycopg2-binary>=2.9
+asyncpg>=0.29
 prometheus-fastapi-instrumentator>=7.0.0
 prometheus-client>=0.20.0
 dvc[s3]

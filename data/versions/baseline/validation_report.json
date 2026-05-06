@@ -16,7 +16,7 @@
   "semantics": {
     "valid": false,
     "issues": [
-      "Found 90694 sessions with < 2 items",
+      "Found 148205 sessions with < 3 items",
       "Found 2108 sessions with > 20 items"
     ],
     "stats": {

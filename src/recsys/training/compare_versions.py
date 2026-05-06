@@ -10,6 +10,7 @@ from typing import Any
 
 def build_comparison_report(
     specs: list[tuple[str, str | Path, str | Path]],
+    drift_specs: list[tuple[str, str | Path]] | None = None,
 ) -> dict[str, Any]:
     """Build a consolidated comparison report from version metric files."""
     versions: list[dict[str, Any]] = []
@@ -26,7 +27,14 @@ def build_comparison_report(
             )
         )
 
-    return {"versions": versions}
+    payload: dict[str, Any] = {"versions": versions}
+    if drift_specs:
+        drift_scenarios = [_build_drift_entry(name, path) for name, path in drift_specs]
+        payload["drift_monitoring"] = {
+            "status": _overall_drift_status(drift_scenarios),
+            "scenarios": drift_scenarios,
+        }
+    return payload
 
 
 def write_comparison_report(payload: dict[str, Any], output_path: str | Path) -> Path:
@@ -78,6 +86,31 @@ def _read_json(path: str | Path) -> dict[str, Any]:
     return payload
 
 
+def _build_drift_entry(name: str, report_path: str | Path) -> dict[str, Any]:
+    report = _read_json(report_path)
+    return {
+        "name": name,
+        "status": _string_or_none(report.get("status")) or "unknown",
+        "summary": _dict_or_empty(report.get("summary")),
+        "report_path": str(report_path),
+    }
+
+
+def _overall_drift_status(scenarios: list[dict[str, Any]]) -> str:
+    statuses = {
+        str(scenario.get("status", "unknown")).lower()
+        for scenario in scenarios
+        if isinstance(scenario, dict)
+    }
+    if "critical" in statuses:
+        return "critical"
+    if "warning" in statuses:
+        return "warning"
+    if "ok" in statuses:
+        return "ok"
+    return "unknown"
+
+
 def _dict_or_empty(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
 
@@ -98,6 +131,15 @@ def _parse_spec(raw: str) -> tuple[str, str, str]:
     return parts[0], parts[1], parts[2]
 
 
+def _parse_drift_spec(raw: str) -> tuple[str, str]:
+    parts = [part.strip() for part in raw.split(",")]
+    if len(parts) != 2 or any(not part for part in parts):
+        raise argparse.ArgumentTypeError(
+            "Each --drift-spec must be 'scenario_name,drift_metrics_path'."
+        )
+    return parts[0], parts[1]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Aggregate per-version training and evaluation metrics."
@@ -109,12 +151,27 @@ def main() -> None:
         type=_parse_spec,
         help="version_name,train_metrics_path,evaluation_metrics_path",
     )
+    parser.add_argument(
+        "--drift-spec",
+        action="append",
+        default=None,
+        type=_parse_drift_spec,
+        help="scenario_name,drift_metrics_path",
+    )
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
-    payload = build_comparison_report(args.spec)
+    payload = build_comparison_report(args.spec, args.drift_spec)
     output_path = write_comparison_report(payload, args.output)
-    print({"output_path": str(output_path), "versions": len(payload["versions"])})
+    print(
+        {
+            "output_path": str(output_path),
+            "versions": len(payload["versions"]),
+            "drift_scenarios": len(
+                payload.get("drift_monitoring", {}).get("scenarios", [])
+            ),
+        }
+    )
 
 
 if __name__ == "__main__":

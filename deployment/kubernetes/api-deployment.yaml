@@ -2,8 +2,16 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: recsys-api
+  namespace: recsys
+  labels:
+    app: recsys-api
 spec:
-  replicas: 1
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app: recsys-api
@@ -11,20 +19,92 @@ spec:
     metadata:
       labels:
         app: recsys-api
+      annotations:
+        recsys.io/resource-sizing: |
+          CPU 250m/1: SR-GNN inference is lightweight. 250m fits 2 pods on c5.large.
+          Memory 512Mi/2Gi: PyTorch + model weights + asyncpg pool.
+          Review after Phase 5 observability is in place.
     spec:
+      serviceAccountName: recsys-api
+      terminationGracePeriodSeconds: 30
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
         fsGroup: 10001
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: recsys-api
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: recsys-api
+      initContainers:
+        - name: model-downloader
+          image: ghcr.io/tlong-ds/recsys-group-project:main
+          imagePullPolicy: Always
+          command:
+            - python3
+            - -m
+            - recsys.serving.cache_warmup
+            - --config
+            - /app/configs/serving_config.yaml
+          env:
+            - name: RECSYS_SERVING_CONFIG
+              value: /app/configs/serving_config.yaml
+            - name: RECSYS_MODEL_CACHE_ROOT
+              value: /app/models/cache
+            - name: RECSYS_DEPLOY_MODEL_NAME
+              value: ""
+            - name: RECSYS_DEPLOY_MODEL_VERSION
+              value: ""
+            - name: RECSYS_DEPLOY_RUN_ID
+              value: ""
+            - name: DAGSHUB_USER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: recsys-secrets
+                  key: dagshub-user-token
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/configs/serving_config.yaml
+              subPath: serving_config.yaml
+              readOnly: true
+            - name: model-cache
+              mountPath: /app/models/cache
       containers:
         - name: api
-          image: recsys-api:latest
-          imagePullPolicy: IfNotPresent
+          image: ghcr.io/tlong-ds/recsys-group-project:main
+          imagePullPolicy: Always
           ports:
             - containerPort: 8000
+              name: http
           env:
-            - name: RECSYS_MODEL_PATH
-              value: /app/models/trained/latest/
+            - name: RECSYS_SERVING_CONFIG
+              value: /app/configs/serving_config.yaml
+            - name: RECSYS_MODEL_CACHE_ROOT
+              value: /app/models/cache
+            - name: RECSYS_DEPLOY_MODEL_NAME
+              value: ""
+            - name: RECSYS_DEPLOY_MODEL_VERSION
+              value: ""
+            - name: RECSYS_DEPLOY_RUN_ID
+              value: ""
+            - name: NEON_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: recsys-secrets
+                  key: neon-db-url
             - name: RECSYS_API_KEYS
               valueFrom:
                 secretKeyRef:
@@ -35,18 +115,38 @@ spec:
                 secretKeyRef:
                   name: recsys-secrets
                   key: dagshub-user-token
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/configs/serving_config.yaml
+              subPath: serving_config.yaml
+              readOnly: true
+            - name: tmp-volume
+              mountPath: /tmp
+            - name: model-cache
+              mountPath: /app/models/cache
           readinessProbe:
             httpGet:
-              path: /health
+              path: /ready
               port: 8000
             initialDelaySeconds: 10
             periodSeconds: 15
+          startupProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 18
           livenessProbe:
             httpGet:
               path: /health
-              port: 8000
+              port: http
             initialDelaySeconds: 30
             periodSeconds: 30
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
           resources:
             requests:
               cpu: 250m
@@ -56,7 +156,16 @@ spec:
               memory: 2Gi
           securityContext:
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop:
                 - ALL
+      volumes:
+        - name: config-volume
+          configMap:
+            name: recsys-serving-config
+        - name: tmp-volume
+          emptyDir: {}
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: recsys-model-cache

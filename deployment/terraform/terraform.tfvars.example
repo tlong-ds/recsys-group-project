@@ -1,0 +1,43 @@
+project_name = "recsys"
+environment  = "prod"
+aws_region   = "ap-southeast-1"
+
+# Cluster Configuration
+eks_cluster_name       = "unique-pop-otter"
+terraform_state_bucket = "recsys-data-storage-067518243363-ap-southeast-1-an"
+github_repo            = "repo:tlong-ds/recsys-group-project"
+
+availability_zones = [
+  "ap-southeast-1a",
+  "ap-southeast-1b",
+  "ap-southeast-1c",
+]
+
+vpc_cidr = "10.20.0.0/16"
+
+private_subnet_cidrs = [
+  "10.20.1.0/24",
+  "10.20.2.0/24",
+  "10.20.3.0/24",
+]
+
+public_subnet_cidrs = [
+  "10.20.101.0/24",
+  "10.20.102.0/24",
+  "10.20.103.0/24",
+]
+
+node_instance_types = ["m6i.large"]
+node_min_size       = 2
+node_desired_size   = 2
+node_max_size       = 6
+
+route53_zone_id = "Z1234567890ABCDE"
+domain_filters  = ["example.com"]
+
+tags = {
+  Owner = "ml-platform"
+}
+
+enable_efs_model_cache = true
+efs_storage_class_name = "recsys-efs-sc"

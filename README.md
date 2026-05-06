@@ -26,6 +26,28 @@ recsys-group-project/
 └── README.md
 ```
 
+## Technology Stack
+
+### Backend (Python 3.10+)
+- **Core Framework:** [FastAPI](https://fastapi.tiangolo.com/), [Uvicorn](https://www.uvicorn.org/)
+- **Machine Learning:** [PyTorch](https://pytorch.org/), [PyTorch Geometric](https://pytorch-geometric.readthedocs.io/) (SR-GNN, GGNN, TAGNN), [Scikit-learn](https://scikit-learn.org/)
+- **Data Processing:** [Polars](https://pola.rs/), [Pandas](https://pandas.pydata.org/), [PyArrow](https://arrow.apache.org/docs/python/), [Pandera](https://pandera.readthedocs.io/) (Schema Validation)
+- **Experiment Tracking:** [MLflow](https://mlflow.org/), [DagsHub](https://dagshub.com/)
+- **Data Versioning:** [DVC](https://dvc.org/) (Data Version Control) with S3 backend
+- **Utilities:** [Loguru](https://github.com/Delgan/loguru) (Logging), [Pydantic](https://docs.pydantic.dev/) (Data Validation), [PyYAML](https://pyyaml.org/)
+
+### DevOps & Infrastructure
+- **Containerization:** [Docker](https://www.docker.com/), [Docker Compose](https://docs.docker.com/compose/)
+- **Orchestration:** [Kubernetes](https://kubernetes.io/) (AWS EKS), [Kustomize](https://kustomize.io/)
+- **Infrastructure as Code:** [Terraform](https://www.terraform.io/)
+- **CI/CD:** [GitHub Actions](https://github.com/features/actions), [GitHub Container Registry](https://github.com/features/packages) (GHCR)
+- **Monitoring:** [Prometheus](https://prometheus.io/), [Grafana](https://grafana.com/), [Evidently](https://www.evidentlyai.com/) (Model Drift & Quality)
+
+### Testing & Quality
+- **Testing:** [Pytest](https://docs.pytest.org/), [Unittest](https://docs.python.org/3/library/unittest.html)
+- **Linting & Formatting:** [Ruff](https://beta.ruff.rs/docs/), [ESLint](https://eslint.org/)
+- **Static Analysis:** [Mypy](http://mypy-lang.org/), [Bandit](https://bandit.readthedocs.io/) (Security), [Pip-audit](https://github.com/pypa/pip-audit)
+
 ## Local commands
 
 ```bash
@@ -39,16 +61,18 @@ dvc repro compare_data_versions
 # Data-only builds (no training)
 dvc repro data_version_v1
 dvc repro data_version_v2
-dvc repro data_version_v3
 # Full matrix: 3 data versions × 8 model profiles (24 train + 24 evaluate stages)
 dvc repro train_matrix evaluate_matrix
+# Select winner, retrain winner profile on train+val, then promote
+dvc repro select_best_model retrain_selected_model promote_retrained_model
 ```
 
-## Versioned data pipelines (V1/V2/V3)
+## Versioned data pipelines (V1/V2)
 
 Each data version has its own params file and artifact directory so it can be
 tracked independently in DVC. The repo also provides a closed-loop comparison
-target that runs data build + train/eval + aggregation in one pipeline.
+target that runs data build + train/eval + drift monitoring + aggregation in one
+pipeline.
 
 ```bash
 # Run the full version comparison pipeline
@@ -57,34 +81,29 @@ dvc repro compare_data_versions
 # Build data versions independently (no training)
 dvc repro data_version_v1
 dvc repro data_version_v2
-dvc repro data_version_v3
 
 # Or run one version branch explicitly
 dvc repro eval_v1
 dvc repro eval_v2
-dvc repro eval_v3
 ```
 
 Version definitions:
 
 - V1 strict filter: `configs/data_versions/v1_strict_filter.yaml`
 - V2 sliding-window safety: `configs/data_versions/v2_sliding_window.yaml`
-- V3 train+val merge: `configs/data_versions/v3_train_plus_val.yaml`
 
 Generated data artifacts:
 
 - `data/versions/v1_strict_filter/*`
 - `data/versions/v2_sliding_window/*`
-- `data/versions/v3_train_plus_val/*`
 
 Generated model and metrics namespaces:
 
 - `models/trained/v1_strict_filter/latest`
 - `models/trained/v2_sliding_window/latest`
-- `models/trained/v3_train_plus_val/latest`
 - `metrics/v1_strict_filter/*.json`
 - `metrics/v2_sliding_window/*.json`
-- `metrics/v3_train_plus_val/*.json`
+- `metrics/monitoring/drift_*.json`
 - `metrics/data_version_comparison.json`
 
 Ad hoc train/evaluate with a specific data version:
@@ -102,7 +121,7 @@ Model profiles are defined in `configs/model_profiles/*.yaml`:
 
 Data versions are defined in `configs/data_versions/*.yaml`:
 
-- `v1_strict_filter`, `v2_sliding_window`, `v3_train_plus_val`
+- `baseline`, `v1_strict_filter`, `v2_sliding_window`
 
 Run fast profiles (default iteration loop):
 
@@ -129,8 +148,15 @@ Artifacts and metrics are separated per job:
 - `metrics/experiments/<data_version>/<model_profile>/training_metrics.json`
 - `metrics/experiments/<data_version>/<model_profile>/evaluation_metrics.json`
 
-For V3 (`val_days: 0`), validation is intentionally empty and early stopping is
-disabled by design. Tune `training.num_epochs` carefully for this setup.
+Final production flow retrains the selected winner on merged train+val data:
+
+```bash
+dvc repro select_best_model retrain_selected_model promote_retrained_model
+```
+
+This retrain uses `metrics/best_model.json` to resolve both `data_version` and
+`model_profile`, builds `data/retrained_selected/trainval_examples.parquet`, and
+promotes from `metrics/retrained_selected/training_metrics.json`.
 
 ## Artifact commit hygiene and DVC push checks
 

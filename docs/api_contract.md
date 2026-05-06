@@ -2,7 +2,7 @@
 
 ## `GET /health`
 
-Public readiness endpoint. Returns service status without exposing local model
+Public liveness endpoint. Returns service status without exposing local model
 paths, run IDs, or raw exception details.
 
 Response body:
@@ -17,9 +17,27 @@ Response body:
 }
 ```
 
+## `GET /ready`
+
+Public model readiness endpoint. Returns `200` only when the configured model
+can be loaded. Returns `503` with a sanitized error when the model is
+unavailable.
+
+Response body:
+
+```json
+{
+  "status": "ready",
+  "model_source": "filesystem",
+  "model_name": "",
+  "model_version": "",
+  "model_alias": ""
+}
+```
+
 ## Authentication
 
-All endpoints except `/health` require an API key:
+All endpoints except `/health` and `/ready` require an API key:
 
 ```http
 Authorization: Bearer <api-key>

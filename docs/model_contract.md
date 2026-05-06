@@ -54,13 +54,9 @@ _tensors_from_graph()   # builds tensors for recommend_from_graph()
 
 **Core idea:** Model the session as a directed graph. Run gated GNN propagation to let each item aggregate information from its neighbours. Read out the session representation by blending the last-item embedding with a soft-attention global context.
 
-```
 Session sequence:  A → B → A → C → B
 
-![alt text](srgnn.png)
-
-
-```
+![SR-GNN session graph example](../srgnn.png)
 
 **Six readout variants — same GNN, different final pooling:**
 
@@ -83,8 +79,10 @@ Session sequence:  A → B → A → C → B
 
 **Core idea:** Same GNN propagation as SR-GNN, but the readout is **target-aware** — the session representation is re-computed for each candidate item, so the model attends to different parts of the session history depending on what it is trying to predict.
 
-```
-![alt text](tagnn.png)
+Target-aware scoring path:
+
+```text
+session graph -> GNN item states -> candidate-aware attention -> item score
 ```
 
 **Memory:** Naïve batching creates a `(B, L, n_items)` tensor — 4+ GB for a 50 k catalogue. This implementation uses **chunked scoring**: processes `score_chunk_size=512` candidates at a time, keeping peak memory at `(B, L, 512)` while producing identical results.
@@ -200,4 +198,4 @@ python -m recsys.training.pipeline --stage train
 
 # Evaluate only (loads latest registered model)
 python -m recsys.training.pipeline --stage evaluate
-`
+```

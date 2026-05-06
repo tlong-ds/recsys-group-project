@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import importlib
+from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -11,27 +13,48 @@ class FakePredictor:
     ) -> list[int]:
         return list(range(100, 100 + top_k))
 
+    def input_quality(self, item_sequence: list[int]) -> dict[str, int | float]:
+        return {
+            "sequence_length": len(item_sequence),
+            "known_items": len(item_sequence),
+            "unknown_items": 0,
+            "oov_ratio": 0.0,
+            "known_catalog_items": 100,
+        }
 
-def _app(monkeypatch, *, rate_limit_per_minute: int = 120, max_body_bytes: int = 65536):
+
+def _app(
+    monkeypatch,
+    *,
+    rate_limit_per_minute: int = 120,
+    max_body_bytes: int = 65536,
+    serving_config_overrides: dict[str, Any] | None = None,
+):
     monkeypatch.setenv("RECSYS_API_KEYS", "test-key,rotated-key")
-    api_module = importlib.import_module("recsys.serving.api")
+    predictor_module = importlib.import_module("recsys.serving.predictor")
     monkeypatch.setattr(
-        api_module.Predictor,
+        predictor_module.Predictor,
         "from_path",
         staticmethod(lambda _: FakePredictor()),
     )
+    api_module = importlib.import_module("recsys.serving.api")
+
+    serving_config = {
+        "security": {
+            "enabled": True,
+            "api_keys_env_var": "RECSYS_API_KEYS",
+            "public_paths": ["/health"],
+            "rate_limit_per_minute": rate_limit_per_minute,
+            "max_body_bytes": max_body_bytes,
+            "docs_enabled": False,
+        }
+    }
+    if serving_config_overrides:
+        serving_config.update(serving_config_overrides)
+
     return api_module.create_app(
         model_path="unused",
-        serving_config={
-            "security": {
-                "enabled": True,
-                "api_keys_env_var": "RECSYS_API_KEYS",
-                "public_paths": ["/health"],
-                "rate_limit_per_minute": rate_limit_per_minute,
-                "max_body_bytes": max_body_bytes,
-                "docs_enabled": False,
-            }
-        },
+        serving_config=serving_config,
         mlflow_config={},
     )
 
@@ -55,6 +78,28 @@ def test_recommend_requires_api_key(monkeypatch) -> None:
     assert response.json()["recommendations"] == [100, 101, 102]
 
 
+@pytest.mark.parametrize(
+    ("method", "path", "kwargs"),
+    [
+        ("get", "/metrics", {}),
+        ("get", "/products", {}),
+        ("post", "/views", {"json": {"sessionId": "s1", "itemId": 100}}),
+        ("get", "/evaluations", {}),
+    ],
+)
+def test_protected_endpoints_require_api_key(
+    monkeypatch,
+    method: str,
+    path: str,
+    kwargs: dict[str, object],
+) -> None:
+    client = TestClient(_app(monkeypatch))
+
+    response = getattr(client, method)(path, **kwargs)
+
+    assert response.status_code == 401
+
+
 def test_metrics_requires_api_key_and_docs_are_disabled(monkeypatch) -> None:
     client = TestClient(_app(monkeypatch))
 
@@ -73,8 +118,55 @@ def test_health_is_public_and_sanitized(monkeypatch) -> None:
     body = response.json()
     assert body["status"] == "ok"
     assert "model_path" not in body
-    assert "run_id" not in body
+    assert "run_id" in body
     assert "error" not in body
+
+
+def test_ready_is_public(monkeypatch) -> None:
+    client = TestClient(_app(monkeypatch))
+
+    response = client.get("/ready")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ready"
+
+
+def test_cors_uses_configured_allowed_origins(monkeypatch) -> None:
+    allowed_origins = [
+        "http://0.0.0.0:5173",
+        "https://recsys-group-project.lytlong-pers.workers.dev/",
+    ]
+    app = _app(
+        monkeypatch,
+        serving_config_overrides={
+            "cors": {"allowed_origins": allowed_origins}
+        }
+    )
+    client = TestClient(app)
+    blocked_origin = "https://example.invalid"
+
+    for origin in allowed_origins:
+        # Strip trailing slash if any, as browsers send origin without it
+        origin_header = origin.rstrip("/")
+        response = client.options(
+            "/recommend",
+            headers={
+                "Origin": origin_header,
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+        assert response.status_code == 200
+        assert response.headers["access-control-allow-origin"] == origin_header
+
+    blocked_response = client.options(
+        "/recommend",
+        headers={
+            "Origin": blocked_origin,
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+    assert blocked_response.status_code == 400
+    assert "access-control-allow-origin" not in blocked_response.headers
 
 
 def test_validation_rejects_unsafe_payloads(monkeypatch) -> None:

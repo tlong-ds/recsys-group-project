@@ -24,9 +24,11 @@ def register_model_version(
     client = _mlflow_client()
     try:
         client.create_registered_model(model_name)
-    except Exception:
+    except Exception as e:
         # Model may already exist in concurrent environments.
-        pass
+        err = str(e).lower()
+        if "resource_already_exists" not in err and "already exists" not in err:
+            raise
     version = client.create_model_version(
         name=model_name,
         source=source,
@@ -45,6 +47,16 @@ def register_model_version(
         "run_id": run_id,
         "source": source,
     }
+
+
+def set_registered_model_alias(*, model_name: str, alias: str, version: str) -> None:
+    """Point a model alias to a specific registered version."""
+    client = _mlflow_client()
+    client.set_registered_model_alias(
+        name=model_name,
+        alias=str(alias),
+        version=str(version),
+    )
 
 
 def _registry_config(config: dict[str, Any]) -> dict[str, Any]:

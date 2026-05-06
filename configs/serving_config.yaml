@@ -2,25 +2,29 @@ serving:
   host: 0.0.0.0
   port: 8000
   reload: false
-  model_path: models/trained/latest/
   preload_model_on_startup: true
   default_top_k: 10
+  cors:
+    allowed_origins:
+      - http://0.0.0.0:5173
+      - https://recsys-group-project.lytlong-pers.workers.dev/
   security:
     enabled: true
     api_keys_env_var: RECSYS_API_KEYS
     public_paths:
       - /health
+      - /ready
     rate_limit_per_minute: 120
     max_body_bytes: 65536
     docs_enabled: false
   model_registry:
-    enabled: false
-    model_name: recsys-srgnn
+    enabled: true
+    model_name: recsys-serving
     model_alias: Production
     model_version: ""
     artifact_path: registered_model
-    local_cache_dir: .cache/recsys_registry
-    fallback_to_filesystem: true
+    local_cache_dir: /app/models/cache
+    fallback_to_filesystem: false
 
 mlflow:
   enabled: true

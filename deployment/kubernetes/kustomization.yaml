@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: recsys
+
+resources:
+  - namespace.yaml
+  - api-service-account.yaml
+  - recsys-serving-configmap.yaml
+  - recsys-model-cache-pvc.yaml
+  - api-deployment.yaml
+  - api-service.yaml
+  - api-hpa.yaml
+  - api-pdb.yaml
+  - api-network-policy.yaml
+  - api-ingress.yaml
+  - prometheus-configmap.yaml
+  - prometheus-deployment.yaml
+  - prometheus-service.yaml
+  - prometheus-pdb.yaml
+  - grafana-datasources-configmap.yaml
+  - grafana-deployment.yaml
+  - grafana-service.yaml
+  - grafana-pdb.yaml
+
+images:
+  - name: ghcr.io/tlong-ds/recsys-group-project
+    newName: ghcr.io/tlong-ds/recsys-group-project
+    newTag: main

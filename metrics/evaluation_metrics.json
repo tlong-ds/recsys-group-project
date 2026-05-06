@@ -1,5 +1,5 @@
 {
-  "model_path": "/private/var/folders/zg/_wfh70cn569_5p6d24bj1_tr0000gn/T/pytest-of-bunnypro/pytest-5/test_multiple_propagation_step0/models/latest",
+  "model_path": "/private/var/folders/zg/_wfh70cn569_5p6d24bj1_tr0000gn/T/pytest-of-bunnypro/pytest-19/test_multiple_propagation_step0/models/latest",
   "test_metrics": {
     "hr@k": 1.0,
     "mrr@k": 1.0

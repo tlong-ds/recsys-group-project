@@ -206,7 +206,8 @@ class _TAGNNCore(SessionEncoderBase):
         Peak memory is O(B × L × chunk_size) regardless of catalogue size.
         Results are identical to the fully-batched (B × L × n_items) approach.
         """
-        assert self._seq_hidden is not None, "Call forward() before compute_scores()"
+        if self._seq_hidden is None:
+            raise RuntimeError("Call forward() before compute_scores()")
 
         seq_hidden = self._seq_hidden  # (B, L, D)
         seq_mask = self._seq_mask  # (B, L)
@@ -292,7 +293,8 @@ class TAGNNRecommender(GraphRecommenderBase):
         return SessionGraphDataset(df, variant=VARIANT_SRGNN)
 
     def _forward_batch(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
-        assert self._core is not None
+        if self._core is None:
+            raise RuntimeError("Model core is not initialized")
         # forward() caches (seq_hidden, seq_mask, ht) as a side-effect
         self._core(
             items=batch["items"],
